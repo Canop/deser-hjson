@@ -40,6 +40,7 @@ impl<'de, 'a> MapAccess<'de> for MapReader<'a, 'de> {
         // parsed as an identifier but serde will call deserialize_string.
         // The problem here is that I thus can't accept colons in quoteless
         // strings, even when not in a identifier location :\
+        self.de.accept_quoteless = false;
         let v = seed.deserialize(&mut *self.de)?;
         self.de.eat_shit()?;
         if self.de.next_char()? != ':' {

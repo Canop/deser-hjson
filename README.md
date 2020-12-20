@@ -81,18 +81,3 @@ let expected = Example {
 assert_eq!(expected, from_str(hjson).unwrap());
 ```
 
-## Limits
-
-### Colons in quoteless strings
-
-Quoteless strings in Hjson end with the line and can contain colons.
-But serde doesn't know, when reading, if a string is logically a "value" or a "key" in a map.
-It means that if we allow colons in quoteles strings the following Hjson
-
-	{
-		key: value
-	}
-
-would be correctly interpreted when deserialized into a struct (because `key` is then known as an identifier) but wouldn't be correctly deserialized into `HashMap<String, String>`.
-
-It seems to me the less surprising choice is to not allow colons in quoteless strings (they're hard to parse for an human too anyway) until I find how to reliably parse quoteless map keys with Serde 1.0.

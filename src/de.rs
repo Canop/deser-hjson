@@ -1,9 +1,7 @@
 //! A Hjson deserializer.
 //!
-//! Parts of this code are taken in Serde's example
-//! (https://serde.rs/impl-deserializer.html)
-//! and some others taken in serde's standard JSON (de)serializer
-//! (https://github.com/serde-rs/json)
+//! Inspiration and structure of this code comes in part from Serde's
+//! tutorial at https://serde.rs/impl-deserializer.html
 //!
 use {
     crate::{
@@ -25,11 +23,22 @@ use {
 
 pub struct Deserializer<'de> {
     input: &'de str, // what remains to be parsed
+
+    // Make it possible to avoid reading a string as a quoteless
+    // string when a key map is waited for (for example in
+    //     {
+    //         key: value
+    //     }
+    // so that the key doesn't go til the end of the line.
+    pub(crate) accept_quoteless: bool,
 }
 
 impl<'de> Deserializer<'de> {
     pub fn from_str(input: &'de str) -> Self {
-        Deserializer { input }
+        Deserializer {
+            input,
+            accept_quoteless: true,
+        }
     }
 }
 
@@ -65,6 +74,7 @@ impl<'de> Deserializer<'de> {
     }
 
     pub(crate) fn eat_line(&mut self) -> Result<()> {
+        self.accept_quoteless = true;
         match self.input.find('\n') {
             Some(len) => {
                 self.input = &self.input[len + 1..];
@@ -92,6 +102,7 @@ impl<'de> Deserializer<'de> {
         loop {
             let ch = self.peek_char()?;
             if ch == '\n' {
+                self.accept_quoteless = true;
                 self.drop(ch);
                 eaten_chars = 0;
             } else if ch.is_whitespace() {
@@ -135,6 +146,11 @@ impl<'de> Deserializer<'de> {
                         self.drop(ch);
                         last_is_slash = true;
                     }
+                }
+                '\n' => {
+                    self.accept_quoteless = true;
+                    self.drop(ch);
+                    last_is_slash = false;
                 }
                 _ if including == Some(ch) => {
                     self.drop(ch);
@@ -197,7 +213,7 @@ impl<'de> Deserializer<'de> {
         Err(Error::Eof)
     }
 
-    /// read the charachter of the coming floating point number, without parsing it
+    /// read the characters of the coming floating point number, without parsing
     fn read_float(&mut self) -> Result<&'de str> {
         self.eat_shit()?;
         for (idx, ch) in self.input.char_indices() {
@@ -244,11 +260,6 @@ impl<'de> Deserializer<'de> {
     }
 
     /// Parse a string until end of line or colon.
-    ///
-    /// FIXME the Hjson standard allow colons in quoteless strings but
-    /// I don't know how to handle them in serde when the string is used
-    /// as a hashmap key (which looks like a struct key for hjson but is
-    /// seen as a string value by serde)
     fn parse_quoteless_str(&mut self) -> Result<&'de str> {
         self.eat_shit()?;
         for (idx, ch) in self.input.char_indices() {
@@ -256,11 +267,6 @@ impl<'de> Deserializer<'de> {
                 '\n' => {
                     let s = &self.input[..idx];
                     self.input = &self.input[idx + 1..];
-                    return Ok(s);
-                }
-                ':' => {
-                    let s = &self.input[..idx];
-                    self.input = &self.input[idx..]; // we keep the colon
                     return Ok(s);
                 }
                 _ => {}
@@ -353,13 +359,22 @@ impl<'de> Deserializer<'de> {
             ',' | ':' | '[' | ']' | '{' | '}' => Err(Error::Syntax),
             '\'' if self.is_at_triple_quote(0) => self.parse_multiline_string(),
             '"' => self.parse_quoted_string(),
-            _ => self.parse_quoteless_str().map(|s| s.to_string()),
+            _ => (
+                if self.accept_quoteless {
+                    self.parse_quoteless_str()
+                } else {
+                    self.parse_quoteless_identifier()
+                }
+            ).map(|s| s.to_string()),
         }
     }
 
     fn parse_identifier(&mut self) -> Result<&'de str> {
         self.eat_shit()?;
         let ch = self.peek_char()?;
+        // we set accept_quoteless to true so that a quoteless
+        // string can be accepted *after* the current identifier
+        self.accept_quoteless = true;
         match ch {
             ',' | ':' | '[' | ']' | '{' | '}' => Err(Error::Syntax),
             '"' => self.parse_quoted_str(),
