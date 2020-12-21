@@ -394,7 +394,7 @@ impl<'de> Deserializer<'de> {
     fn parse_string_value(&mut self) -> Result<String> {
         self.eat_shit()?;
         let ch = self.peek_char()?;
-        match ch {
+        let v = match ch {
             ',' | ':' | '[' | ']' | '{' | '}' => self.fail(UnexpectedChar),
             '\'' if self.is_at_triple_quote(0) => self.parse_multiline_string(),
             '"' => self.parse_quoted_string(),
@@ -404,7 +404,9 @@ impl<'de> Deserializer<'de> {
                 self.parse_quoteless_identifier()
             })
             .map(|s| s.to_string()),
-        }
+        };
+        self.accept_quoteless = true;
+        v
     }
 
     fn parse_identifier(&mut self) -> Result<&'de str> {
