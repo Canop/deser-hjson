@@ -1,17 +1,9 @@
 use {
     crate::{
-        Deserializer,
-        error::{Error, Result},
+        de::Deserializer,
+        error::{Error, ErrorCode::*, Result},
     },
-    serde::{
-        de::{
-            self,
-            DeserializeSeed,
-            EnumAccess,
-            VariantAccess,
-            Visitor,
-        },
-    },
+    serde::de::{self, DeserializeSeed, EnumAccess, VariantAccess, Visitor},
 };
 
 pub struct EnumReader<'a, 'de: 'a> {
@@ -45,7 +37,7 @@ impl<'de, 'a> EnumAccess<'de> for EnumReader<'a, 'de> {
         if self.de.next_char()? == ':' {
             Ok((val, self))
         } else {
-            Err(Error::ExpectedMapColon)
+            self.de.fail(ExpectedMapColon)
         }
     }
 }
@@ -58,7 +50,7 @@ impl<'de, 'a> VariantAccess<'de> for EnumReader<'a, 'de> {
     // If the `Visitor` expected this variant to be a unit variant, the input
     // should have been the plain string case handled in `deserialize_enum`.
     fn unit_variant(self) -> Result<()> {
-        Err(Error::ExpectedString)
+        self.de.fail(ExpectedString)
     }
 
     // Newtype variants are represented in JSON as `{ NAME: VALUE }` so
@@ -81,16 +73,10 @@ impl<'de, 'a> VariantAccess<'de> for EnumReader<'a, 'de> {
 
     // Struct variants are represented in JSON as `{ NAME: { K: V, ... } }` so
     // deserialize the inner map here.
-    fn struct_variant<V>(
-        self,
-        _fields: &'static [&'static str],
-        visitor: V,
-    ) -> Result<V::Value>
+    fn struct_variant<V>(self, _fields: &'static [&'static str], visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
         de::Deserializer::deserialize_map(self.de, visitor)
     }
 }
-
-

@@ -1,7 +1,4 @@
-use {
-    crate::*,
-    serde::Deserialize,
-};
+use {crate::*, serde::Deserialize};
 
 // allows writing vo!["a", "b"] to build a vec of strings
 macro_rules! vo {
@@ -99,4 +96,3 @@ fn test_enum() {
     let expected = E::Struct { a: 1 };
     assert_eq!(expected, from_str(j).unwrap());
 }
-

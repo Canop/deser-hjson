@@ -1,13 +1,9 @@
 use {
     crate::{
-        Deserializer,
-        error::{Error, Result},
+        de::Deserializer,
+        error::{Error, ErrorCode::*, Result},
     },
-    serde::{
-        de::{
-            DeserializeSeed, MapAccess,
-        },
-    },
+    serde::de::{DeserializeSeed, MapAccess},
 };
 
 pub struct MapReader<'a, 'de: 'a> {
@@ -16,9 +12,7 @@ pub struct MapReader<'a, 'de: 'a> {
 
 impl<'a, 'de> MapReader<'a, 'de> {
     pub fn new(de: &'a mut Deserializer<'de>) -> Self {
-        MapReader {
-            de,
-        }
+        MapReader { de }
     }
 }
 
@@ -43,10 +37,11 @@ impl<'de, 'a> MapAccess<'de> for MapReader<'a, 'de> {
         self.de.accept_quoteless = false;
         let v = seed.deserialize(&mut *self.de)?;
         self.de.eat_shit()?;
-        if self.de.next_char()? != ':' {
-            return Err(Error::ExpectedMapColon);
+        if self.de.next_char()? == ':' {
+            Ok(Some(v))
+        } else {
+            self.de.fail(ExpectedMapColon)
         }
-        Ok(Some(v))
     }
 
     /// read a map value and eat the optional comma which may follow it

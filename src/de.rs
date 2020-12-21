@@ -8,23 +8,24 @@ use {
         de_enum::*,
         de_map::*,
         de_seq::*,
-        error::{Error, Result},
-    },
-    serde::{
-        Deserialize,
-        de::{
-            self,
-            IntoDeserializer,
-            Visitor,
+        error::{
+            Error,
+            ErrorCode::{self, *},
+            Result,
         },
     },
+    serde::de::{self, IntoDeserializer, Visitor},
     unescape::unescape,
 };
 
 /// The deserializer. You normally don't call it directly
 /// but use the `from_str` function available at crate's level.
 pub struct Deserializer<'de> {
-    input: &'de str, // what remains to be parsed
+    // the complete string we received
+    src: &'de str,
+
+    // where we're at
+    pos: usize,
 
     // Make it possible to avoid reading a string as a quoteless
     // string when a key map is waited for (for example in
@@ -36,64 +37,111 @@ pub struct Deserializer<'de> {
 }
 
 impl<'de> Deserializer<'de> {
-    pub fn from_str(input: &'de str) -> Self {
+    pub fn from_str(src: &'de str) -> Self {
         Deserializer {
-            input,
+            src,
+            pos: 0,
             accept_quoteless: true,
         }
     }
-}
 
-/// deserialize the given string into a type implementing `Deserialize`
-pub fn from_str<'a, T>(s: &'a str) -> Result<T>
-where
-    T: Deserialize<'a>,
-{
-    let mut deserializer = Deserializer::from_str(s);
-    let t = T::deserialize(&mut deserializer)?;
-    deserializer.eat_shit().ok();
-    if deserializer.input.is_empty() {
-        Ok(t)
-    } else {
-        Err(Error::TrailingCharacters)
+    pub(crate) fn err(&self, code: ErrorCode) -> Error {
+        // we compute the number of lines and columns to current pos
+        let (mut line, mut col) = (1, 1);
+        for ch in self.src[..self.pos].chars() {
+            if ch == '\n' {
+                col = 1;
+                line += 1;
+            } else {
+                col += 1;
+            }
+        }
+        let at = self.input().chars().take(15).collect();
+        Error::Syntax {
+            line,
+            col,
+            code,
+            at,
+        }
     }
-}
 
-impl<'de> Deserializer<'de> {
+    pub(crate) fn fail<T>(&self, code: ErrorCode) -> Result<T> {
+        Err(self.err(code))
+    }
+
+    /// return an error if there's more than just spaces
+    /// and comments in the remaining input
+    pub fn check_all_consumed(&mut self) -> Result<()> {
+        self.eat_shit().ok();
+        if self.input().is_empty() {
+            Ok(())
+        } else {
+            self.fail(TrailingCharacters)
+        }
+    }
+
+    /// what remains to be parsed (including the
+    /// character we peeked at, if any)
+    fn input(&self) -> &'de str {
+        &self.src[self.pos..]
+    }
+
     /// Look at the first character in the input without consuming it.
     pub(crate) fn peek_char(&self) -> Result<char> {
-        self.input.chars().next().ok_or(Error::Eof)
+        match self.input().chars().next() {
+            Some(ch) => Ok(ch),
+            _ => self.fail(Eof),
+        }
+    }
+
+    /// return the `len` first bytes of the input, without checking anything
+    /// (assuming it has been done) nor consuming anything
+    pub(crate) fn start(&self, len: usize) -> &'de str {
+        &self.src[self.pos..self.pos + len]
     }
 
     /// remove the next character (which is assumed to be ch)
     pub(crate) fn drop(&mut self, ch: char) {
-        self.input = &self.input[ch.len_utf8()..];
+        self.advance(ch.len_utf8());
+    }
+
+    /// remove the next character (which is assumed to be ch)
+    pub(crate) fn advance(&mut self, bytes_count: usize) {
+        self.pos += bytes_count;
+    }
+
+    /// Consume the first character in the input.
+    pub(crate) fn next_char(&mut self) -> Result<char> {
+        let ch = self.peek_char()?;
+        self.drop(ch);
+        Ok(ch)
     }
 
     /// tells whether the next tree bytes are `'''` which
     /// is the start or end of a multiline string literal in Hjson
     pub(crate) fn is_at_triple_quote(&self, offset: usize) -> bool {
-        self.input.len() >= offset + 3 && &self.input[offset..offset+3] == "'''"
+        self.src.len() >= self.pos + offset + 3
+            && &self.src[offset + self.pos..offset + self.pos + 3] == "'''"
     }
 
     pub(crate) fn eat_line(&mut self) -> Result<()> {
         self.accept_quoteless = true;
-        match self.input.find('\n') {
+        match self.input().find('\n') {
             Some(len) => {
-                self.input = &self.input[len + 1..];
+                self.advance(len + 1);
                 Ok(())
             }
-            None => Err(Error::Eof),
+            None => self.fail(Eof),
         }
     }
 
     pub(crate) fn eat_until_star_slash(&mut self) -> Result<()> {
-        match self.input.find("*/") {
+        match self.input().find("*/") {
             Some(len) => {
-                self.input = &self.input[len + 2..];
+                self.advance(len + 2);
                 Ok(())
             }
-            None => Err(Error::Eof),
+            None => self.fail(Eof),
         }
     }
 
@@ -121,10 +169,7 @@ impl<'de> Deserializer<'de> {
         self.eat_shit_and(None)
     }
 
-    pub(crate) fn eat_shit_and(
-        &mut self,
-        mut including: Option<char>,
-    ) -> Result<()> {
+    pub(crate) fn eat_shit_and(&mut self, mut including: Option<char>) -> Result<()> {
         let mut last_is_slash = false;
         loop {
             let ch = self.peek_char()?;
@@ -171,23 +216,16 @@ impl<'de> Deserializer<'de> {
         }
     }
 
-    /// Consume the first character in the input.
-    pub(crate) fn next_char(&mut self) -> Result<char> {
-        let ch = self.peek_char()?;
-        self.input = &self.input[ch.len_utf8()..];
-        Ok(ch)
-    }
-
     /// Parse the JSON identifier `true` or `false`.
     fn parse_bool(&mut self) -> Result<bool> {
-        if self.input.starts_with("true") {
-            self.input = &self.input["true".len()..];
+        if self.input().starts_with("true") {
+            self.advance("true".len());
             Ok(true)
-        } else if self.input.starts_with("false") {
-            self.input = &self.input["false".len()..];
+        } else if self.input().starts_with("false") {
+            self.advance("false".len());
             Ok(false)
         } else {
-            Err(Error::ExpectedBoolean)
+            self.fail(ExpectedBoolean)
         }
     }
 
@@ -195,43 +233,43 @@ impl<'de> Deserializer<'de> {
     /// resulting string
     fn read_integer(&mut self, unsigned: bool) -> Result<&'de str> {
         self.eat_shit()?;
-        for (idx, ch) in self.input.char_indices() {
+        for (idx, ch) in self.input().char_indices() {
             match ch {
                 '-' if unsigned => {
-                    return Err(Error::ExpectedPositiveInteger);
+                    return self.fail(ExpectedPositiveInteger);
                 }
                 '-' if idx > 0 => {
-                    return Err(Error::Syntax);
+                    return self.fail(UnexpectedChar);
                 }
                 '0'..='9' | '-' => {
                     // if it's too long, this will be handled at conversion
                 }
                 _ => {
-                    let s = &self.input[..idx];
-                    self.input = &self.input[idx..];
+                    let s = self.start(idx);
+                    self.advance(idx); // we keep the last char
                     return Ok(s);
                 }
             }
         }
-        Err(Error::Eof)
+        self.fail(Eof)
     }
 
     /// read the characters of the coming floating point number, without parsing
     fn read_float(&mut self) -> Result<&'de str> {
         self.eat_shit()?;
-        for (idx, ch) in self.input.char_indices() {
+        for (idx, ch) in self.input().char_indices() {
             match ch {
                 '0'..='9' | '-' | '+' | '.' | 'e' | 'E' => {
                     // if it's invalid, this will be handled at conversion
                 }
                 _ => {
-                    let s = &self.input[..idx];
-                    self.input = &self.input[idx..];
+                    let s = self.start(idx);
+                    self.advance(idx); // we keep the last char
                     return Ok(s);
                 }
             }
         }
-        Err(Error::Eof)
+        self.fail(Eof)
     }
 
     /// Parse a string until the next unescaped quote.
@@ -241,62 +279,60 @@ impl<'de> Deserializer<'de> {
     fn parse_quoted_str(&mut self) -> Result<&'de str> {
         if self.next_char()? != '"' {
             // should not happen
-            return Err(Error::ExpectedString);
+            return self.fail(ExpectedString);
         }
-        match self.input.find('"') {
+        match self.input().find('"') {
             Some(len) => {
-                let s = &self.input[..len];
-                self.input = &self.input[len + 1..];
+                let s = self.start(len);
+                self.advance(len + 1); // we consume the '"'
                 Ok(s)
             }
-            None => Err(Error::Eof),
+            None => self.fail(Eof),
         }
     }
-
 
     /// Parse a string until the next unescaped quote
     fn parse_quoted_string(&mut self) -> Result<String> {
         match unescape(self.parse_quoted_str()?) {
             Some(s) => Ok(s),
-            None => Err(Error::InvalidEscapeSequence),
+            None => self.fail(InvalidEscapeSequence),
         }
     }
 
-    /// Parse a string until end of line or colon.
+    /// Parse a string until end of line
     fn parse_quoteless_str(&mut self) -> Result<&'de str> {
         self.eat_shit()?;
-        for (idx, ch) in self.input.char_indices() {
+        for (idx, ch) in self.input().char_indices() {
             match ch {
                 '\n' => {
-                    let s = &self.input[..idx];
-                    self.input = &self.input[idx + 1..];
+                    let s = self.start(idx);
+                    self.advance(idx + 1);
                     return Ok(s);
                 }
                 _ => {}
             }
         }
-        Err(Error::Eof)
+        self.fail(Eof)
     }
 
     /// Parse a string until the next triple quote.
-    ///
     fn parse_multiline_string(&mut self) -> Result<String> {
         if !self.is_at_triple_quote(0) {
             // We could probably assume the first three bytes
             // are "'''" and can be dropped without check
-            return Err(Error::ExpectedString);
+            return self.fail(ExpectedString);
         }
-        self.input = &self.input[3..];
+        self.advance(3);
         self.eat_line()?;
         // we count the spaces on the first line
         let indent = self.eat_spaces()?;
         let mut v = String::new();
         let mut line_len = indent;
-        for (idx, ch) in self.input.char_indices() {
+        for (idx, ch) in self.input().char_indices() {
             match ch {
                 '\'' if self.is_at_triple_quote(idx) => {
-                    self.input = &self.input[idx+3..];
-                    v.truncate(v.trim_end().len()); // is there faster ?
+                    self.advance(idx + 3);
+                    v.truncate(v.trim_end().len()); // trimming end
                     return Ok(v);
                 }
                 '\n' => {
@@ -311,31 +347,31 @@ impl<'de> Deserializer<'de> {
                 }
             }
         }
-        Err(Error::Eof)
+        self.fail(Eof)
     }
 
     /// parse a map key without quotes
     fn parse_quoteless_identifier(&mut self) -> Result<&'de str> {
         self.eat_shit()?;
-        for (idx, ch) in self.input.char_indices() {
+        for (idx, ch) in self.input().char_indices() {
             match ch {
                 '"' | ',' | '[' | ']' | '{' | '}' => {
-                    return Err(Error::Syntax);
+                    return self.fail(UnexpectedChar);
                 }
                 ' ' => {
-                    let s = &self.input[..idx];
-                    self.input = &self.input[idx + 1..];
+                    let s = self.start(idx);
+                    self.advance(idx + 1);
                     return Ok(s);
                 }
                 ':' => {
-                    let s = &self.input[..idx];
-                    self.input = &self.input[idx..]; // we keep the colon
+                    let s = self.start(idx);
+                    self.advance(idx); // we keep the colon
                     return Ok(s);
                 }
                 _ => {}
             }
         }
-        Err(Error::Eof)
+        self.fail(Eof)
     }
 
     /// parse a string which may be a value
@@ -347,7 +383,7 @@ impl<'de> Deserializer<'de> {
         self.eat_shit()?;
         let ch = self.peek_char()?;
         match ch {
-            ',' | ':' | '[' | ']' | '{' | '}' => Err(Error::Syntax),
+            ',' | ':' | '[' | ']' | '{' | '}' => self.fail(UnexpectedChar),
             '"' => self.parse_quoted_str(),
             _ => self.parse_quoteless_str(),
         }
@@ -359,16 +395,15 @@ impl<'de> Deserializer<'de> {
         self.eat_shit()?;
         let ch = self.peek_char()?;
         match ch {
-            ',' | ':' | '[' | ']' | '{' | '}' => Err(Error::Syntax),
+            ',' | ':' | '[' | ']' | '{' | '}' => self.fail(UnexpectedChar),
             '\'' if self.is_at_triple_quote(0) => self.parse_multiline_string(),
             '"' => self.parse_quoted_string(),
-            _ => (
-                if self.accept_quoteless {
-                    self.parse_quoteless_str()
-                } else {
-                    self.parse_quoteless_identifier()
-                }
-            ).map(|s| s.to_string()),
+            _ => (if self.accept_quoteless {
+                self.parse_quoteless_str()
+            } else {
+                self.parse_quoteless_identifier()
+            })
+            .map(|s| s.to_string()),
         }
     }
 
@@ -379,7 +414,7 @@ impl<'de> Deserializer<'de> {
         // string can be accepted *after* the current identifier
         self.accept_quoteless = true;
         match ch {
-            ',' | ':' | '[' | ']' | '{' | '}' => Err(Error::Syntax),
+            ',' | ':' | '[' | ']' | '{' | '}' => self.fail(UnexpectedChar),
             '"' => self.parse_quoted_str(),
             _ => self.parse_quoteless_identifier(),
         }
@@ -407,7 +442,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
             '-' => self.deserialize_f64(visitor),
             '[' => self.deserialize_seq(visitor),
             '{' => self.deserialize_map(visitor),
-            _ => Err(Error::Syntax),
+            _ => self.fail(UnexpectedChar),
         }
     }
 
@@ -422,10 +457,9 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        let v = self.read_integer(false)
-            .and_then(|s| {
-                s.parse().map_err(|_| Error::Message(format!("not a valid i8")))
-            })?;
+        let v = self
+            .read_integer(false)
+            .and_then(|s| s.parse().map_err(|_| self.err(ExpectedI8)))?;
         visitor.visit_i8(v)
     }
 
@@ -433,10 +467,9 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        let v = self.read_integer(false)
-            .and_then(|s| {
-                s.parse().map_err(|_| Error::Message(format!("not a valid i16")))
-            })?;
+        let v = self
+            .read_integer(false)
+            .and_then(|s| s.parse().map_err(|_| self.err(ExpectedI16)))?;
         visitor.visit_i16(v)
     }
 
@@ -444,10 +477,9 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        let v = self.read_integer(false)
-            .and_then(|s| {
-                s.parse().map_err(|_| Error::Message(format!("not a valid i32")))
-            })?;
+        let v = self
+            .read_integer(false)
+            .and_then(|s| s.parse().map_err(|_| self.err(ExpectedI32)))?;
         visitor.visit_i32(v)
     }
 
@@ -455,10 +487,9 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        let v = self.read_integer(false)
-            .and_then(|s| {
-                s.parse().map_err(|_| Error::Message(format!("not a valid i64")))
-            })?;
+        let v = self
+            .read_integer(false)
+            .and_then(|s| s.parse().map_err(|_| self.err(ExpectedI64)))?;
         visitor.visit_i64(v)
     }
 
@@ -466,10 +497,9 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        let v = self.read_integer(true)
-            .and_then(|s| {
-                s.parse().map_err(|_| Error::Message(format!("not a valid u8")))
-            })?;
+        let v = self
+            .read_integer(true)
+            .and_then(|s| s.parse().map_err(|_| self.err(ExpectedU8)))?;
         visitor.visit_u8(v)
     }
 
@@ -477,10 +507,9 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        let v = self.read_integer(true)
-            .and_then(|s| {
-                s.parse().map_err(|_| Error::Message(format!("not a valid u16")))
-            })?;
+        let v = self
+            .read_integer(true)
+            .and_then(|s| s.parse().map_err(|_| self.err(ExpectedU16)))?;
         visitor.visit_u16(v)
     }
 
@@ -488,10 +517,9 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        let v = self.read_integer(true)
-            .and_then(|s| {
-                s.parse().map_err(|_| Error::Message(format!("not a valid u32")))
-            })?;
+        let v = self
+            .read_integer(true)
+            .and_then(|s| s.parse().map_err(|_| self.err(ExpectedU32)))?;
         visitor.visit_u32(v)
     }
 
@@ -499,10 +527,9 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        let v = self.read_integer(true)
-            .and_then(|s| {
-                s.parse().map_err(|_| Error::Message(format!("not a valid u64")))
-            })?;
+        let v = self
+            .read_integer(true)
+            .and_then(|s| s.parse().map_err(|_| self.err(ExpectedU64)))?;
         visitor.visit_u64(v)
     }
 
@@ -510,10 +537,9 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        let v = self.read_float()
-            .and_then(|s| {
-                s.parse().map_err(|_| Error::Message(format!("not a valid f32")))
-            })?;
+        let v = self
+            .read_float()
+            .and_then(|s| s.parse().map_err(|_| self.err(ExpectedF32)))?;
         visitor.visit_f32(v)
     }
 
@@ -521,10 +547,9 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        let v = self.read_float()
-            .and_then(|s| {
-                s.parse().map_err(|_| Error::Message(format!("not a valid f64")))
-            })?;
+        let v = self
+            .read_float()
+            .and_then(|s| s.parse().map_err(|_| self.err(ExpectedF64)))?;
         visitor.visit_f64(v)
     }
 
@@ -532,11 +557,9 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        let c = self.parse_string_value()
-            .and_then(|s| {
-                s.chars().next()
-                    .ok_or_else(|| Error::ExpectedSingleChar)
-            })?;
+        let c = self
+            .parse_string_value()
+            .and_then(|s| s.chars().next().ok_or_else(|| self.err(ExpectedSingleChar)))?;
         visitor.visit_char(c)
     }
 
@@ -573,8 +596,8 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         V: Visitor<'de>,
     {
         self.eat_shit()?;
-        if self.input.starts_with("null") {
-            self.input = &self.input["null".len()..];
+        if self.input().starts_with("null") {
+            self.advance("null".len());
             visitor.visit_none()
         } else {
             visitor.visit_some(self)
@@ -587,31 +610,23 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         V: Visitor<'de>,
     {
         self.eat_shit()?;
-        if self.input.starts_with("null") {
-            self.input = &self.input["null".len()..];
+        if self.input().starts_with("null") {
+            self.advance("null".len());
             visitor.visit_unit()
         } else {
-            Err(Error::ExpectedNull)
+            self.fail(ExpectedNull)
         }
     }
 
     // Unit struct means a named value containing no data.
-    fn deserialize_unit_struct<V>(
-        self,
-        _name: &'static str,
-        visitor: V,
-    ) -> Result<V::Value>
+    fn deserialize_unit_struct<V>(self, _name: &'static str, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
         self.deserialize_unit(visitor)
     }
 
-    fn deserialize_newtype_struct<V>(
-        self,
-        _name: &'static str,
-        visitor: V,
-    ) -> Result<V::Value>
+    fn deserialize_newtype_struct<V>(self, _name: &'static str, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
@@ -629,10 +644,10 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
             if self.next_char()? == ']' {
                 Ok(value)
             } else {
-                Err(Error::ExpectedArrayEnd)
+                self.fail(ExpectedArrayEnd)
             }
         } else {
-            Err(Error::ExpectedArray)
+            self.fail(ExpectedArray)
         }
     }
 
@@ -666,10 +681,10 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
             if self.next_char()? == '}' {
                 Ok(value)
             } else {
-                Err(Error::ExpectedMapEnd)
+                self.fail(ExpectedMapEnd)
             }
         } else {
-            Err(Error::ExpectedMap)
+            self.fail(ExpectedMap)
         }
     }
 
@@ -705,10 +720,10 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
             if self.next_char()? == '}' {
                 Ok(value)
             } else {
-                Err(Error::ExpectedMapEnd)
+                self.fail(ExpectedMapEnd)
             }
         } else {
-            Err(Error::ExpectedEnum)
+            self.fail(ExpectedEnum)
         }
     }
 

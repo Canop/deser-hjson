@@ -59,17 +59,24 @@ assert_eq!(expected, from_str(hjson).unwrap());
 ```
 */
 
-
+mod de;
 mod de_enum;
 mod de_map;
 mod de_seq;
-mod de;
 mod error;
 
 #[cfg(test)]
 mod test;
 
-pub use {
-    de::*,
-    error::*,
-};
+pub use error::*;
+
+/// deserialize the given string into a type implementing `Deserialize`
+pub fn from_str<'a, T>(s: &'a str) -> Result<T>
+where
+    T: serde::Deserialize<'a>,
+{
+    let mut deserializer = de::Deserializer::from_str(s);
+    let t = T::deserialize(&mut deserializer)?;
+    deserializer.check_all_consumed()?;
+    Ok(t)
+}

@@ -1,13 +1,9 @@
 use {
     crate::{
-        Deserializer,
+        de::Deserializer,
         error::{Error, Result},
     },
-    serde::{
-        de::{
-            DeserializeSeed, SeqAccess,
-        },
-    },
+    serde::de::{DeserializeSeed, SeqAccess},
 };
 
 /// an implementation of serde's SeqAccess interface which
