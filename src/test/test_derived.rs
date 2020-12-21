@@ -36,7 +36,7 @@ fn test_struct() {
         // quotes around keys are optional
         "int": -1 # this comment goes to end of line
         float: -5.7
-        txt2: a quoteless string
+        txt2: a quoteless string : with a colon!
         txt3:
             '''
             you can have multiline strings
@@ -55,7 +55,7 @@ fn test_struct() {
         int: -1,
         float: -5.7,
         txt1: None,
-        txt2: Some("a quoteless string".to_owned()),
+        txt2: Some("a quoteless string : with a colon!".to_owned()),
         txt3: "you can have multiline strings\nand they're free of unexpected spacing".to_owned(),
         seq: vo!["another quoteless string", "b1\nb2", "c"],
     };

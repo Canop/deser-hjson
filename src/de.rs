@@ -21,6 +21,8 @@ use {
     unescape::unescape,
 };
 
+/// The deserializer. You normally don't call it directly
+/// but use the `from_str` function available at crate's level.
 pub struct Deserializer<'de> {
     input: &'de str, // what remains to be parsed
 
@@ -29,7 +31,7 @@ pub struct Deserializer<'de> {
     //     {
     //         key: value
     //     }
-    // so that the key doesn't go til the end of the line.
+    // ) so that the key doesn't go til the end of the line.
     pub(crate) accept_quoteless: bool,
 }
 
@@ -42,6 +44,7 @@ impl<'de> Deserializer<'de> {
     }
 }
 
+/// deserialize the given string into a type implementing `Deserialize`
 pub fn from_str<'a, T>(s: &'a str) -> Result<T>
 where
     T: Deserialize<'a>,
