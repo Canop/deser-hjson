@@ -428,9 +428,24 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        // if we're here in a derive guided deserialization,
-        // we're probably parsing unexpected data
-        self.deserialize_str(visitor)
+        self.eat_shit()?;
+        // TODO look ahead to decide between integers and floats (and maybe size)
+        match self.peek_char()? {
+            '"' => self.deserialize_str(visitor),
+            '0'..='9' => self.deserialize_f64(visitor),
+            '-' => self.deserialize_f64(visitor),
+            '[' => self.deserialize_seq(visitor),
+            '{' => self.deserialize_map(visitor),
+            _ => {
+                let s = self.parse_str_value()?;
+                match s {
+                    "null" => visitor.visit_unit(),
+                    "false" => visitor.visit_bool(false),
+                    "true" => visitor.visit_bool(true),
+                    _ => visitor.visit_borrowed_str(s),
+                }
+            }
+        }
     }
 
     fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value>
