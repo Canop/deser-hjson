@@ -8,6 +8,8 @@ use {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// The types of errors which can happen in our code
+/// during deserialization
 #[derive(Debug, Clone, PartialEq)]
 pub enum ErrorCode {
     Eof,
@@ -37,14 +39,14 @@ pub enum ErrorCode {
     ExpectedSingleChar,
     InvalidEscapeSequence,
     TrailingCharacters,
-    UnexpectedChar, // FIXME it's sometimes used for a wrong struct key
+    UnexpectedChar,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Error {
     Syntax {
         line: usize,
-        col: usize, // in chars
+        col: usize, // in chars (tab is one char)
         code: ErrorCode,
         at: String, // next few chars
     },
