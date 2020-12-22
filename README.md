@@ -16,7 +16,7 @@
 
 This is a Serde 1.0 compatible deserializer for [Hjson](https://hjson.github.io/), tailored for derive powered deserialization.
 
-It's a work-in-progress, having been tested only minimally for now.
+Be careful that this deserializer hasn't been much tested extensivelly enough and isn't used in many projects (please tell me if you use it).
 
 If you're interested in using this deserializer, or notice a problem, please come and tell me on [Miaou](https://miaou.dystroy.org/3768).
 
@@ -81,3 +81,11 @@ let expected = Example {
 assert_eq!(expected, from_str(hjson).unwrap());
 ```
 
+## Performances
+
+A serious benchmark is missing now but this deserializer seems fast enough.
+
+[Broot](https://dystroy.org/broot) can be configured either with TOML or with Hjson (the selection is dynamic, based on the file extension).
+
+Broot configuration loading takes about 100µs when in Hjson while it takes about 2ms in TOML (so Hjson seems to be 20 times faster than TOML on this simple almost anecdotical test).
+It's very possible the TOML deserializer is slower only because it's more strict and does more checks, though (I'm not familiar enough with its implementation).
