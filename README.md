@@ -16,7 +16,7 @@
 
 This is a Serde 1.0 compatible deserializer for [Hjson](https://hjson.github.io/), tailored for derive powered deserialization.
 
-Hjson is a good language for configuration file.
+Hjson is a good language for a configuration file.
 Such file should be written by a human, read and modified by other humans, then deserialized into a precise structure by a program:
 
 ```rust
@@ -24,7 +24,7 @@ let file_content = fs::read_to_string(&file_path)?;
 let configuration = deser_hjson::from_str(&file_content);
 ```
 
-If the configuration file is invalid or doesn't match the structure the expected type, the error details the expectation and the error precise location.
+If the configuration file is invalid or doesn't match the expected type, the error details the expectation and the error precise location.
 
 ## Project state
 
