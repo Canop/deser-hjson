@@ -50,7 +50,6 @@ impl<'de, 'a> MapAccess<'de> for MapReader<'a, 'de> {
         V: DeserializeSeed<'de>,
     {
         self.de.eat_shit()?;
-        // TODO ensure there's either a comma or lf or } at the end there
         let v = seed.deserialize(&mut *self.de);
         self.de.eat_shit_and(Some(','))?;
         v

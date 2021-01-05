@@ -138,3 +138,21 @@ fn test_enum() {
     let expected = E::Struct { a: 1 };
     assert_eq!(expected, from_str(j).unwrap());
 }
+
+#[test]
+fn test_string() {
+    #[derive(Deserialize, PartialEq, Debug)]
+    struct W {
+        c: String,
+    }
+    println!("test_string");
+    assert_eq!(W{c:"test".to_string()}, from_str("{c:test\n}").unwrap());
+    assert_eq!(W{c:"test".to_string()}, from_str("{c:\"test\"}").unwrap());
+    assert_eq!(
+        W {c:"xterm -e \"vi /some/path\"".to_string()},
+        from_str(r#"{
+            c: "xterm -e \"vi /some/path\""
+        }"#).unwrap(),
+    );
+    assert_eq!(W{c:"\x0C\x0C".to_string()}, from_str("{c:\"\\f\\u000C\"}").unwrap());
+}

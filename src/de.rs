@@ -15,7 +15,6 @@ use {
         },
     },
     serde::de::{self, IntoDeserializer, Visitor},
-    unescape::unescape,
 };
 
 /// The deserializer. You normally don't call it directly
@@ -91,6 +90,16 @@ impl<'de> Deserializer<'de> {
         match self.input().chars().next() {
             Some(ch) => Ok(ch),
             _ => self.fail(Eof),
+        }
+    }
+
+    pub(crate) fn take_str(&mut self, bytes_count: usize) -> Result<&str> {
+        if self.src.len() >= self.pos + bytes_count {
+            let pos = self.pos;
+            self.pos += bytes_count;
+            Ok(&self.src[pos..pos + bytes_count])
+        } else {
+            self.fail(Eof)
         }
     }
 
@@ -291,25 +300,51 @@ impl<'de> Deserializer<'de> {
         }
     }
 
+
+
     /// Parse a string until the next unescaped quote
     fn parse_quoted_string(&mut self) -> Result<String> {
-        match unescape(self.parse_quoted_str()?) {
-            Some(s) => Ok(s),
-            None => self.fail(InvalidEscapeSequence),
+        let mut s = String::new();
+        self.advance(1); // we go past the first "
+        loop {
+            let mut c = self.next_char()?;
+            if c == '\"' {
+                break;
+            } else if c == '\\' {
+                c = match self.next_char()? {
+                    '\"' => '\"',
+                    '\'' => '\'',
+                    '\\' => '\\',
+                    '/' => '/',
+                    'b' => '\x08', // why did they put this in JSON ?
+                    'f' => '\x0c', // and this one ?!
+                    'n' => '\n',
+                    'r' => '\r',
+                    't' => '\t',
+                    'u' => {
+                        self.take_str(4).ok()
+                            .and_then(|s| u32::from_str_radix(s, 16).ok())
+                            .and_then(std::char::from_u32)
+                            .ok_or_else(|| self.err(InvalidEscapeSequence))?
+                    }
+                    _ => {
+                        return self.fail(InvalidEscapeSequence);
+                    }
+                };
+            }
+            s.push(c);
         }
+        Ok(s)
     }
 
     /// Parse a string until end of line
     fn parse_quoteless_str(&mut self) -> Result<&'de str> {
         self.eat_shit()?;
         for (idx, ch) in self.input().char_indices() {
-            match ch {
-                '\n' => {
-                    let s = self.start(idx);
-                    self.advance(idx + 1);
-                    return Ok(s);
-                }
-                _ => {}
+            if ch == '\n' {
+                let s = self.start(idx);
+                self.advance(idx + 1);
+                return Ok(s);
             }
         }
         self.fail(Eof)
