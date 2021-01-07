@@ -32,7 +32,7 @@ pub struct Deserializer<'de> {
     //         key: value
     //     }
     // ) so that the key doesn't go til the end of the line.
-    pub(crate) accept_quoteless: bool,
+    pub(crate) accept_quoteless_value: bool,
 }
 
 impl<'de> Deserializer<'de> {
@@ -40,7 +40,7 @@ impl<'de> Deserializer<'de> {
         Deserializer {
             src,
             pos: 0,
-            accept_quoteless: true,
+            accept_quoteless_value: true,
         }
     }
 
@@ -134,7 +134,7 @@ impl<'de> Deserializer<'de> {
     }
 
     pub(crate) fn eat_line(&mut self) -> Result<()> {
-        self.accept_quoteless = true;
+        self.accept_quoteless_value = true;
         match self.input().find('\n') {
             Some(len) => {
                 self.advance(len + 1);
@@ -162,7 +162,7 @@ impl<'de> Deserializer<'de> {
         loop {
             let ch = self.peek_char()?;
             if ch == '\n' {
-                self.accept_quoteless = true;
+                self.accept_quoteless_value = true;
                 self.drop(ch);
                 eaten_chars = 0;
             } else if ch.is_whitespace() {
@@ -205,7 +205,7 @@ impl<'de> Deserializer<'de> {
                     }
                 }
                 '\n' => {
-                    self.accept_quoteless = true;
+                    self.accept_quoteless_value = true;
                     self.drop(ch);
                     last_is_slash = false;
                 }
@@ -280,27 +280,6 @@ impl<'de> Deserializer<'de> {
         }
         self.fail(Eof)
     }
-
-    /// Parse a string until the next unescaped quote.
-    //  This function doesn't manage escaping (I don't
-    //  know how to deal with building a string with
-    //  serde's lifetime system)
-    fn parse_quoted_str(&mut self) -> Result<&'de str> {
-        if self.next_char()? != '"' {
-            // should not happen
-            return self.fail(ExpectedString);
-        }
-        match self.input().find('"') {
-            Some(len) => {
-                let s = self.start(len);
-                self.advance(len + 1); // we consume the '"'
-                Ok(s)
-            }
-            None => self.fail(Eof),
-        }
-    }
-
-
 
     /// Parse a string until the next unescaped quote
     fn parse_quoted_string(&mut self) -> Result<String> {
@@ -410,21 +389,6 @@ impl<'de> Deserializer<'de> {
     }
 
     /// parse a string which may be a value
-    /// (i.e. not an map key or variant identifier ).
-    /// This function returns a borrowed string, which means it
-    /// can't manage multiline strings (which don't map to a
-    /// part of the source).
-    fn parse_str_value(&mut self) -> Result<&'de str> {
-        self.eat_shit()?;
-        let ch = self.peek_char()?;
-        match ch {
-            ',' | ':' | '[' | ']' | '{' | '}' => self.fail(UnexpectedChar),
-            '"' => self.parse_quoted_str(),
-            _ => self.parse_quoteless_str(),
-        }
-    }
-
-    /// parse a string which may be a value
     /// (i.e. not an map key or variant identifier )
     fn parse_string_value(&mut self) -> Result<String> {
         self.eat_shit()?;
@@ -433,28 +397,29 @@ impl<'de> Deserializer<'de> {
             ',' | ':' | '[' | ']' | '{' | '}' => self.fail(UnexpectedChar),
             '\'' if self.is_at_triple_quote(0) => self.parse_multiline_string(),
             '"' => self.parse_quoted_string(),
-            _ => (if self.accept_quoteless {
+            _ => (if self.accept_quoteless_value {
                 self.parse_quoteless_str()
             } else {
                 self.parse_quoteless_identifier()
             })
             .map(|s| s.to_string()),
         };
-        self.accept_quoteless = true;
+        self.accept_quoteless_value = true;
         v
     }
 
-    fn parse_identifier(&mut self) -> Result<&'de str> {
+    fn parse_identifier(&mut self) -> Result<String> {
         self.eat_shit()?;
         let ch = self.peek_char()?;
-        // we set accept_quoteless to true so that a quoteless
+        // we set accept_quoteless_value to true so that a quoteless
         // string can be accepted *after* the current identifier
-        self.accept_quoteless = true;
-        match ch {
+        self.accept_quoteless_value = true;
+        let r = match ch {
             ',' | ':' | '[' | ']' | '{' | '}' => self.fail(UnexpectedChar),
-            '"' => self.parse_quoted_str(),
-            _ => self.parse_quoteless_identifier(),
-        }
+            '"' => self.parse_quoted_string(),
+            _ => self.parse_quoteless_identifier().map(|s| s.to_string())
+        };
+        r
     }
 }
 
@@ -468,18 +433,18 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         self.eat_shit()?;
         // TODO look ahead to decide between integers and floats (and maybe size)
         match self.peek_char()? {
-            '"' => self.deserialize_str(visitor),
+            '"' => self.deserialize_string(visitor),
             '0'..='9' => self.deserialize_f64(visitor),
             '-' => self.deserialize_f64(visitor),
             '[' => self.deserialize_seq(visitor),
             '{' => self.deserialize_map(visitor),
             _ => {
-                let s = self.parse_str_value()?;
-                match s {
+                let s = self.parse_string_value()?;
+                match s.as_ref() {
                     "null" => visitor.visit_unit(),
                     "false" => visitor.visit_bool(false),
                     "true" => visitor.visit_bool(true),
-                    _ => visitor.visit_borrowed_str(s),
+                    _ => visitor.visit_string(s),
                 }
             }
         }
@@ -606,7 +571,9 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        visitor.visit_borrowed_str(self.parse_str_value()?)
+        // we can't always borrow strs from the source as it's not possible
+        // when there's an escape sequence. So str are parsed as strings.
+        self.deserialize_string(visitor)
     }
 
     fn deserialize_string<V>(self, visitor: V) -> Result<V::Value>
@@ -751,7 +718,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         self.eat_shit()?;
         if self.peek_char()? == '"' {
             // Visit a unit variant.
-            visitor.visit_enum(self.parse_quoted_str()?.into_deserializer())
+            visitor.visit_enum(self.parse_quoted_string()?.into_deserializer())
         } else if self.next_char()? == '{' {
             // Visit a newtype variant, tuple variant, or struct variant.
             let value = visitor.visit_enum(EnumReader::new(self))?;
@@ -770,7 +737,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     where
         V: Visitor<'de>,
     {
-        visitor.visit_borrowed_str(self.parse_identifier()?)
+        visitor.visit_string(self.parse_identifier()?)
     }
 
     fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value>

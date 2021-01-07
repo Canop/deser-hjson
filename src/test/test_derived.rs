@@ -140,6 +140,56 @@ fn test_enum() {
 }
 
 #[test]
+fn test_arr_struct_untagged() {
+    // this enum is untagged: the variant is automatically recognized
+    #[derive(Deserialize, PartialEq, Debug)]
+    #[serde(untagged)]
+    enum Untagged {
+        String(String),
+        Array(Vec<String>),
+    }
+    #[derive(Deserialize, PartialEq, Debug)]
+    struct InnerThing {
+        name: String,
+        untagged: Untagged,
+    }
+    #[derive(Deserialize, PartialEq, Debug)]
+    struct OuterThing {
+        outer_name: String,
+        items: Vec<InnerThing>,
+    }
+    let hjson = r#"
+        {
+            outer_name: the thing
+            items: [
+                {
+                    name: first item
+                    untagged: "xterm -e \"nvim {file}\""
+                }
+                {
+                    name: "also an \"item\""
+                    untagged: ["bla", "et", "bla"]
+                }
+            ]
+        }
+    "#;
+    let outer_thing = OuterThing {
+        outer_name: "the thing".to_owned(),
+        items: vec![
+            InnerThing {
+                name: "first item".to_owned(),
+                untagged: Untagged::String("xterm -e \"nvim {file}\"".to_string()),
+            },
+            InnerThing {
+                name: r#"also an "item""#.to_owned(),
+                untagged: Untagged::Array(vo!["bla", "et", "bla"]),
+            },
+        ],
+    };
+    assert_eq!(outer_thing, from_str::<OuterThing>(hjson).unwrap());
+}
+
+#[test]
 fn test_string() {
     #[derive(Deserialize, PartialEq, Debug)]
     struct W {
