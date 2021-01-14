@@ -19,6 +19,17 @@ macro_rules! vo {
     }}
 }
 
+// allows writing mo!{"a":"b", "c":"d"} to build a map of strings to strings
+macro_rules! mo {
+    ($($key:literal:$value:literal),* $(,)?) => {{
+        let mut map = HashMap::new();
+        $(
+            map.insert($key.to_owned(), $value.to_owned());
+        )*
+        map
+    }}
+}
+
 // this example tries to test all the hard things of Hjson
 #[test]
 fn test_struct() {
@@ -195,7 +206,6 @@ fn test_string() {
     struct W {
         c: String,
     }
-    println!("test_string");
     assert_eq!(W{c:"test".to_string()}, from_str("{c:test\n}").unwrap());
     assert_eq!(W{c:"test".to_string()}, from_str("{c:\"test\"}").unwrap());
     assert_eq!(
@@ -205,4 +215,30 @@ fn test_string() {
         }"#).unwrap(),
     );
     assert_eq!(W{c:"\x0C\x0C".to_string()}, from_str("{c:\"\\f\\u000C\"}").unwrap());
+}
+
+#[test]
+fn test_weird_map_keys() {
+    #[derive(Deserialize, PartialEq, Debug)]
+    struct W {
+        map: HashMap<String, String>,
+    }
+    let hjson = r#"{
+        map: {
+            <none>: 0
+            // π: 3.14
+            τ: 6.28
+            /: slash // hard one
+            \: "" // no trap here
+        }
+    }"#;
+    let value = W {
+        map: mo!{
+            "<none>": "0",
+            "τ": "6.28",
+            "/": "slash // hard one", // quoteless string values go til line end
+            "\\": "",
+        },
+    };
+    assert_eq!(value, from_str(hjson).unwrap());
 }

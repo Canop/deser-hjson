@@ -219,6 +219,9 @@ impl<'de> Deserializer<'de> {
                     last_is_slash = false;
                 }
                 _ => {
+                    if last_is_slash {
+                        self.pos -= 1;
+                    }
                     return Ok(());
                 }
             }
