@@ -65,9 +65,6 @@ mod de_map;
 mod de_seq;
 mod error;
 
-#[cfg(test)]
-mod test;
-
 pub use error::*;
 
 /// deserialize the given string into a type implementing `Deserialize`

@@ -50,7 +50,6 @@ pub enum Error {
         code: ErrorCode,
         at: String, // next few chars
     },
-    // not sure this variant can be created
     Message(String),
 }
 

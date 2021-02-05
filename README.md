@@ -28,7 +28,6 @@ If the configuration file is invalid or doesn't match the expected type, the err
 
 ## Example
 
-This Hjson document comes from [Hjson's introduction](https://hjson.github.io/)
 
 ```rust
 use {
@@ -36,6 +35,7 @@ use {
     serde::Deserialize,
     std::collections::HashMap,
 };
+// This Hjson document comes from https://hjson.github.io/
 let hjson = r#"
 {
   // use #, // or /**/ comments,
@@ -87,11 +87,27 @@ let expected = Example {
 assert_eq!(expected, from_str(hjson).unwrap());
 ```
 
-## Performances
+## Known usages
 
-A serious benchmark is missing now but this deserializer seems fast enough.
+* [Broot](https://dystroy.org/broot) can be configured either with TOML or with Hjson (the selection is dynamic, based on the file extension).
 
-[Broot](https://dystroy.org/broot) can be configured either with TOML or with Hjson (the selection is dynamic, based on the file extension).
+* [Resc](https://github.com/Canop/resc) can be configured either with JSON or with Hjson
 
-Broot configuration loading takes about 100µs when in Hjson while it takes about 2ms in TOML (so Hjson seems to be 20 times faster than TOML on this simple almost anecdotical test).
-It's very possible the TOML deserializer is slower only because it's more strict and does more checks, though (I'm not familiar enough with its implementation).
+In all my tests, deserializing as Hjson was faster than JSON (even with a JSON file) and *much* faster than TOML.
+
+## FAQ
+
+### Does it work with JSON ?
+
+Yes in the sense that any JSON file can be read as Hjson.
+
+### Why only a derive-based deserializer?
+
+Guessing the types in a format with implicit typing is way too dangereous.
+When your user typed `false`, was it a string or a boolean ? When she typed `3`, was it as string or a number ?
+While [not as crazy as YAML](https://hitchdev.com/strictyaml/why/implicit-typing-removed/), Hjson has no internal guard for this, and thus should only be deserialized into explicit types.
+
+### Why a deserializer and no serializer?
+
+Hjson isn't a data exchange format. It's intended to be written by humans, be full of comments and with a meaningful formatting.
+While serializers would make sense in some context, they would have to be template based, or offer other means to specify comments and formatting, and serde isn't the right tool for that.
