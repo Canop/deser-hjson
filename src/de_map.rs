@@ -50,8 +50,12 @@ impl<'de, 'a> MapAccess<'de> for MapReader<'a, 'de> {
         V: DeserializeSeed<'de>,
     {
         self.de.eat_shit()?;
-        let v = seed.deserialize(&mut *self.de);
-        self.de.eat_shit_and(Some(','))?;
-        v
+        match seed.deserialize(&mut *self.de) {
+            Err(e) => self.de.cook_err(e),
+            Ok(v) => {
+                self.de.eat_shit_and(Some(','))?;
+                Ok(v)
+            }
+        }
     }
 }

@@ -1,9 +1,6 @@
 use {
-    serde::{de, ser},
-    std::{
-        self,
-        fmt::{self, Display},
-    },
+    serde::de,
+    std::fmt,
 };
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -44,34 +41,45 @@ pub enum ErrorCode {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Error {
+
+    /// a Hjson syntax error raised in our code,
+    /// with location
     Syntax {
         line: usize,
         col: usize, // in chars (tab is one char)
         code: ErrorCode,
         at: String, // next few chars
     },
-    Message(String),
-}
 
-impl ser::Error for Error {
-    fn custom<T: Display>(msg: T) -> Self {
-        Error::Message(msg.to_string())
-    }
+    /// A Serde error, with approximate location
+    Serde {
+        line: usize,
+        col: usize, // in chars (tab is one char)
+        message: String,
+    },
+
+    /// a raw Serde error. We should try to
+    /// convert them to Serde located errors as
+    /// much as possible
+    RawSerde(String),
 }
 
 impl de::Error for Error {
-    fn custom<T: Display>(msg: T) -> Self {
-        Error::Message(msg.to_string())
+    fn custom<T: fmt::Display>(msg: T) -> Self {
+        Error::RawSerde(msg.to_string())
     }
 }
 
-impl Display for Error {
+impl fmt::Display for Error {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Syntax { line, col, code, at } => {
                 write!(formatter, "{:?} at {}:{} at {:?}", code, line, col, at)
             }
-            Self::Message(msg) => {
+            Self::Serde { line, col, message } => {
+                write!(formatter, "{:?} near {}:{}", message, line, col)
+            }
+            Self::RawSerde(msg) => {
                 write!(formatter, "error message: {:?}", msg)
             }
         }

@@ -36,6 +36,7 @@ pub struct Deserializer<'de> {
 }
 
 impl<'de> Deserializer<'de> {
+
     pub fn from_str(src: &'de str) -> Self {
         Deserializer {
             src,
@@ -44,8 +45,8 @@ impl<'de> Deserializer<'de> {
         }
     }
 
-    pub(crate) fn err(&self, code: ErrorCode) -> Error {
-        // we compute the number of lines and columns to current pos
+    /// compute the number of lines and columns to current pos
+    fn location(&self) -> (usize, usize) {
         let (mut line, mut col) = (1, 1);
         for ch in self.src[..self.pos].chars() {
             if ch == '\n' {
@@ -55,6 +56,13 @@ impl<'de> Deserializer<'de> {
                 col += 1;
             }
         }
+        (line, col)
+    }
+
+    /// build a syntax error
+    pub(crate) fn err(&self, code: ErrorCode) -> Error {
+        let (line, col) = self.location();
+        // we'll show the next 15 chars in the error message
         let at = self.input().chars().take(15).collect();
         Error::Syntax {
             line,
@@ -62,6 +70,24 @@ impl<'de> Deserializer<'de> {
             code,
             at,
         }
+    }
+
+    /// convert a serde raised error into one with precise location
+    pub(crate) fn cook_err<T>(&self, err: Error) -> Result<T> {
+        match err {
+            Error::RawSerde(message) => {
+                let (line, col) = self.location();
+                // we have no real idea where Serde found the problem
+                // so we write the position but not the characters around
+                Err(Error::Serde {
+                    line,
+                    col,
+                    message,
+                })
+            }
+            e => Err(e),
+        }
+
     }
 
     pub(crate) fn fail<T>(&self, code: ErrorCode) -> Result<T> {
@@ -685,7 +711,12 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     {
         self.eat_shit()?;
         if self.next_char()? == '{' {
-            let value = visitor.visit_map(MapReader::new(&mut self))?;
+            let value = match visitor.visit_map(MapReader::new(&mut self)) {
+                Ok(v) => v,
+                Err(e) => {
+                    return self.cook_err(e);
+                }
+            };
             self.eat_shit()?;
             if self.next_char()? == '}' {
                 Ok(value)
