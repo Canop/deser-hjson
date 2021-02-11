@@ -1,8 +1,5 @@
 //! A Hjson deserializer.
 //!
-//! Inspiration and structure of this code comes in part from Serde's
-//! tutorial at https://serde.rs/impl-deserializer.html
-//!
 use {
     crate::{
         de_enum::*,
@@ -87,7 +84,6 @@ impl<'de> Deserializer<'de> {
             }
             e => Err(e),
         }
-
     }
 
     pub(crate) fn fail<T>(&self, code: ErrorCode) -> Result<T> {
@@ -109,6 +105,13 @@ impl<'de> Deserializer<'de> {
     /// character we peeked at, if any)
     fn input(&self) -> &'de str {
         &self.src[self.pos..]
+    }
+
+    /// takes all remaining characters
+    fn take_all(&mut self) -> &'de str {
+        let s = &self.src[self.pos..];
+        self.pos = self.src.len();
+        s
     }
 
     /// Look at the first character in the input without consuming it.
@@ -289,7 +292,7 @@ impl<'de> Deserializer<'de> {
                 }
             }
         }
-        self.fail(Eof)
+        Ok(self.take_all())
     }
 
     /// read the characters of the coming floating point number, without parsing
@@ -307,7 +310,7 @@ impl<'de> Deserializer<'de> {
                 }
             }
         }
-        self.fail(Eof)
+        Ok(self.take_all())
     }
 
     /// Parse a string until the next unescaped quote
@@ -355,7 +358,7 @@ impl<'de> Deserializer<'de> {
                 return Ok(s);
             }
         }
-        self.fail(Eof)
+        Ok(self.take_all())
     }
 
     /// Parse a string until the next triple quote.
@@ -460,7 +463,6 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         V: Visitor<'de>,
     {
         self.eat_shit()?;
-        // TODO look ahead to decide between integers and floats (and maybe size)
         match self.peek_char()? {
             '"' => self.deserialize_string(visitor),
             '0'..='9' => self.deserialize_f64(visitor),
