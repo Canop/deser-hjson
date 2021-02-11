@@ -68,9 +68,9 @@ mod error;
 pub use error::*;
 
 /// deserialize the given string into a type implementing `Deserialize`
-pub fn from_str<'a, T>(s: &'a str) -> Result<T>
+pub fn from_str<T>(s: &str) -> Result<T>
 where
-    T: serde::Deserialize<'a>,
+    T: serde::de::DeserializeOwned,
 {
     let mut deserializer = de::Deserializer::from_str(s);
     let t = T::deserialize(&mut deserializer)?;
