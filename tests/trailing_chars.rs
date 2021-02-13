@@ -15,6 +15,8 @@ fn test_dont_need_trailing_spaces() {
     deser_hjson::from_str::<T>("{}").unwrap();
     deser_hjson::from_str::<i32>("1").unwrap();
     deser_hjson::from_str::<f64>("1e-3").unwrap();
+    deser_hjson::from_str::<f64>("-1.3").unwrap();
+    deser_hjson::from_str::<Vec<u8>>("[]").unwrap();
 }
 
 #[test]

@@ -62,6 +62,7 @@ assert_eq!(expected, from_str(hjson).unwrap());
 mod de;
 mod de_enum;
 mod de_map;
+mod de_number;
 mod de_seq;
 mod error;
 

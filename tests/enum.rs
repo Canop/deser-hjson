@@ -49,6 +49,8 @@ fn test_arr_struct_untagged() {
     #[derive(Deserialize, PartialEq, Debug)]
     #[serde(untagged)]
     enum Untagged {
+        Int(u16),
+        Float(f32),
         String(String),
         Array(Vec<String>),
     }
@@ -74,6 +76,14 @@ fn test_arr_struct_untagged() {
                     name: "also an \"item\""
                     untagged: ["bla", "et", "bla"]
                 }
+                {
+                    name: third
+                    untagged: 4
+                }
+                {
+                    name: fourth
+                    untagged: 4.3
+                }
             ]
         }
     "#;
@@ -87,6 +97,14 @@ fn test_arr_struct_untagged() {
             InnerThing {
                 name: r#"also an "item""#.to_owned(),
                 untagged: Untagged::Array(vo!["bla", "et", "bla"]),
+            },
+            InnerThing {
+                name: "third".to_owned(),
+                untagged: Untagged::Int(4),
+            },
+            InnerThing {
+                name: "fourth".to_owned(),
+                untagged: Untagged::Float(4.3),
             },
         ],
     };

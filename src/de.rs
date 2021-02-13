@@ -4,6 +4,7 @@ use {
     crate::{
         de_enum::*,
         de_map::*,
+        de_number::*,
         de_seq::*,
         error::{
             Error,
@@ -103,12 +104,12 @@ impl<'de> Deserializer<'de> {
 
     /// what remains to be parsed (including the
     /// character we peeked at, if any)
-    fn input(&self) -> &'de str {
+    pub(crate) fn input(&self) -> &'de str {
         &self.src[self.pos..]
     }
 
     /// takes all remaining characters
-    fn take_all(&mut self) -> &'de str {
+    pub(crate) fn take_all(&mut self) -> &'de str {
         let s = &self.src[self.pos..];
         self.pos = self.src.len();
         s
@@ -143,7 +144,7 @@ impl<'de> Deserializer<'de> {
         self.advance(ch.len_utf8());
     }
 
-    /// remove the next character (which is assumed to be ch)
+    /// advance the cursor (assuming bytes_count is consistent with chars)
     pub(crate) fn advance(&mut self, bytes_count: usize) {
         self.pos += bytes_count;
     }
@@ -465,8 +466,10 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         self.eat_shit()?;
         match self.peek_char()? {
             '"' => self.deserialize_string(visitor),
-            '0'..='9' => self.deserialize_f64(visitor),
-            '-' => self.deserialize_f64(visitor),
+            '0'..='9' | '-' => {
+                let number = Number::read(self)?;
+                number.visit(self, visitor)
+            }
             '[' => self.deserialize_seq(visitor),
             '{' => self.deserialize_map(visitor),
             _ => {
