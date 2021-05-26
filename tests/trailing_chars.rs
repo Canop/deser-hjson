@@ -11,7 +11,7 @@ use {
 #[test]
 fn test_dont_need_trailing_spaces() {
     #[derive(Debug, Deserialize)]
-    struct T {};
+    struct T {}
     deser_hjson::from_str::<T>("{}").unwrap();
     deser_hjson::from_str::<i32>("1").unwrap();
     deser_hjson::from_str::<f64>("1e-3").unwrap();
@@ -22,7 +22,7 @@ fn test_dont_need_trailing_spaces() {
 #[test]
 fn test_accept_trailing_spaces() {
     #[derive(Debug, Deserialize)]
-    struct T {};
+    struct T {}
     deser_hjson::from_str::<T>("{}   ").unwrap();
     deser_hjson::from_str::<i32>("1 ").unwrap();
     deser_hjson::from_str::<f64>("1e-3 ").unwrap();
@@ -31,7 +31,7 @@ fn test_accept_trailing_spaces() {
 #[test]
 fn test_choke_on_trailing_chars() {
     #[derive(Debug, Deserialize)]
-    struct T {};
+    struct T {}
     assert!(deser_hjson::from_str::<T>("{}  e ").is_err());
     assert!(deser_hjson::from_str::<i32>("1 -").is_err());
     assert!(deser_hjson::from_str::<f64>("1e-3 e").is_err());

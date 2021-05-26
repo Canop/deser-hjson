@@ -5,7 +5,9 @@ use {
 
 #[macro_use] mod common;
 
-/// test precise primitive type guessing
+/// test precise primitive type guessing.
+/// Note to users: be cautious with this, guessing types is
+/// dangerous as Hjson is inherently ambiguous.
 #[test]
 fn test_guess_type() {
     #[derive(Deserialize, PartialEq, Debug)]

@@ -87,7 +87,7 @@ let expected = Example {
 assert_eq!(expected, from_str(hjson).unwrap());
 ```
 
-## Known usages
+## Known open-source usages
 
 * [Broot](https://dystroy.org/broot) can be configured either with TOML or with Hjson (the selection is dynamic, based on the file extension).
 

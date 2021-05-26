@@ -1,3 +1,9 @@
+### next
+- make \r\n behave like \n
+
+<a name="v0.1.12"></a>
+### v0.1.12 - 2021-02-13
+- more precise number type guessing
 
 <a name="v0.1.11"></a>
 ### v0.1.11 - 2021-02-11

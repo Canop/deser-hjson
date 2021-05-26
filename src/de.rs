@@ -353,7 +353,7 @@ impl<'de> Deserializer<'de> {
     fn parse_quoteless_str(&mut self) -> Result<&'de str> {
         self.eat_shit()?;
         for (idx, ch) in self.input().char_indices() {
-            if ch == '\n' {
+            if ch == '\r' || ch == '\n' {
                 let s = self.start(idx);
                 self.advance(idx + 1);
                 return Ok(s);
@@ -381,6 +381,11 @@ impl<'de> Deserializer<'de> {
                     self.advance(idx + 3);
                     v.truncate(v.trim_end().len()); // trimming end
                     return Ok(v);
+                }
+                '\r' => {
+                    // a \r not followed by a \n is probably not
+                    // valid but I'm not sure an error would be
+                    // more useful here than silently ignoring it
                 }
                 '\n' => {
                     v.push(ch);
