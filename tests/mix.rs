@@ -67,14 +67,14 @@ fn test_struct() {
             "c",
         ]
 
-        # order of keys doesn't matter and you can
-        # have a single value after a map
-        float: -5.7
-
         enum_map: {
             "some key"    : a
             "another key" : B
         }
+
+        # order of keys doesn't matter and you can
+        # have a single value after a map
+        float: -5.7
     }
     "#;
     let mut enum_map = HashMap::new();

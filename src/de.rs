@@ -399,31 +399,30 @@ impl<'de> Deserializer<'de> {
                 }
             }
         }
-        self.fail(Eof)
+        self.fail(Eof) // it's not legal to not have the triple quotes
     }
 
-    /// parse a map key without quotes
+    /// parse an identifier without quotes:
+    /// - map key
+    /// - enum variant
     fn parse_quoteless_identifier(&mut self) -> Result<&'de str> {
         self.eat_shit()?;
         for (idx, ch) in self.input().char_indices() {
             match ch {
-                '"' | ',' | '[' | ']' | '{' | '}' => {
-                    return self.fail(UnexpectedChar);
+                '"' | ',' | '[' | ']' | '{' | '}' | ':' | '\r'| '\n' => {
+                    let s = self.start(idx);
+                    self.advance(idx);
+                    return Ok(s);
                 }
                 ' ' => {
                     let s = self.start(idx);
                     self.advance(idx + 1);
                     return Ok(s);
                 }
-                ':' => {
-                    let s = self.start(idx);
-                    self.advance(idx); // we keep the colon
-                    return Ok(s);
-                }
                 _ => {}
             }
         }
-        self.fail(Eof)
+        Ok(self.take_all())
     }
 
     /// parse a string which may be a value
@@ -760,20 +759,25 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         V: Visitor<'de>,
     {
         self.eat_shit()?;
-        if self.peek_char()? == '"' {
-            // Visit a unit variant.
-            visitor.visit_enum(self.parse_quoted_string()?.into_deserializer())
-        } else if self.next_char()? == '{' {
-            // Visit a newtype variant, tuple variant, or struct variant.
-            let value = visitor.visit_enum(EnumReader::new(self))?;
-            self.eat_shit()?;
-            if self.next_char()? == '}' {
-                Ok(value)
-            } else {
-                self.fail(ExpectedMapEnd)
+        match self.peek_char()? {
+            '"' => {
+                // Visit a unit variant.
+                visitor.visit_enum(self.parse_quoted_string()?.into_deserializer())
             }
-        } else {
-            self.fail(ExpectedEnum)
+            '{' => {
+                self.advance(1);
+                // Visit a newtype variant, tuple variant, or struct variant.
+                let value = visitor.visit_enum(EnumReader::new(self))?;
+                self.eat_shit()?;
+                if self.next_char()? == '}' {
+                    Ok(value)
+                } else {
+                    self.fail(ExpectedMapEnd)
+                }
+            }
+            _ => {
+                visitor.visit_enum(self.parse_quoteless_identifier()?.into_deserializer())
+            }
         }
     }
 

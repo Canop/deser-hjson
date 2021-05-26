@@ -44,6 +44,31 @@ fn test_enum() {
 }
 
 #[test]
+fn test_quoteless_tag_variant() {
+    #[derive(Deserialize, PartialEq, Debug)]
+    enum E {
+        A,
+        B,
+    }
+    let hjson = "B\n";
+    assert_eq!(E::B, from_str(hjson).unwrap());
+    let hjson = "B";
+    assert_eq!(E::B, from_str(hjson).unwrap());
+    #[derive(Deserialize, PartialEq, Debug)]
+    struct S {
+        e: E,
+    }
+    let hjson = r#"{
+        e: B
+    }"#;
+    assert_eq!(S{e:E::B}, from_str(hjson).unwrap());
+    let hjson = r#"{"e": "B"}"#;
+    assert_eq!(S{e:E::B}, from_str(hjson).unwrap());
+    let hjson = "{e:B}";
+    assert_eq!(S{e:E::B}, from_str(hjson).unwrap());
+}
+
+#[test]
 fn test_arr_struct_untagged() {
     // this enum is untagged: the variant is automatically recognized
     #[derive(Deserialize, PartialEq, Debug)]

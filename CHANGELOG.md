@@ -1,5 +1,7 @@
-### next
+<a name="v0.1.13"></a>
+### v0.1.13 - 2021-05-26
 - make \r\n behave like \n
+- allow more liberty for enum variants
 
 <a name="v0.1.12"></a>
 ### v0.1.12 - 2021-02-13
