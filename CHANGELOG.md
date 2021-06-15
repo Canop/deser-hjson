@@ -1,3 +1,7 @@
+<a name="v1.0.0"></a>
+### v1.0.0 - 2021-06-15
+- it's stable. Calling it a 1.0
+
 <a name="v0.1.13"></a>
 ### v0.1.13 - 2021-05-26
 - make \r\n behave like \n
