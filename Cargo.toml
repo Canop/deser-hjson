@@ -12,3 +12,6 @@ readme = "README.md"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
+
+[dev-dependencies]
+serde-value = "0.7.0"
