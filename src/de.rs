@@ -317,10 +317,12 @@ impl<'de> Deserializer<'de> {
     /// Parse a string until the next unescaped quote
     fn parse_quoted_string(&mut self) -> Result<String> {
         let mut s = String::new();
-        self.advance(1); // we go past the first "
+
+        let starting_quote = self.next_char()?;
+
         loop {
             let mut c = self.next_char()?;
-            if c == '\"' {
+            if c == starting_quote {
                 break;
             } else if c == '\\' {
                 c = match self.next_char()? {
@@ -433,7 +435,7 @@ impl<'de> Deserializer<'de> {
         let v = match ch {
             ',' | ':' | '[' | ']' | '{' | '}' => self.fail(UnexpectedChar),
             '\'' if self.is_at_triple_quote(0) => self.parse_multiline_string(),
-            '"' => self.parse_quoted_string(),
+            '"' | '\'' => self.parse_quoted_string(),
             _ => (if self.accept_quoteless_value {
                 self.parse_quoteless_str()
             } else {
