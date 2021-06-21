@@ -12,3 +12,10 @@ readme = "README.md"
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
+
+[dev-dependencies]
+glassbench = "0.3"
+
+[[bench]]
+name = "parse"
+harness = false

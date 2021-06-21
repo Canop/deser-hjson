@@ -76,11 +76,13 @@ fn test_guess_type() {
     guess("null", Guess::String(None));
     guess("[15, 50]", Guess::U16Array(vec![15, 50]));
     guess("[15, -50]", Guess::I16Array(vec![15, -50]));
-    guess("[\"abc\"]", Guess::StrArray(vec!["abc".to_owned()]));
-    guess("[\"\"]", Guess::StrArray(vec!["".to_owned()]));
+    guess("[\"abc\"]", Guess::StrArray(vo!["abc"]));
+    guess("[\"\"]", Guess::StrArray(vo![""]));
 }
 
-/// check we fixed the bug #3
+/// check a few tricky guesses, mostly the problems related
+/// to braces on the line of what looks like a quoteless string
+/// (see issue #3)
 #[test]
 fn test_wrapped_guess() {
     guess_wrapped("{gift:null}", Guess::String(None));
@@ -89,4 +91,18 @@ fn test_wrapped_guess() {
     guess_wrapped("{gift:'bar'}", string("bar"));
     guess_wrapped(r#"{gift:"bar"}"#, string("bar"));
     guess_wrapped("{gift:42}", Guess::U8(42));
+    guess_wrapped(
+        r#" {
+            gift: [
+                "abc",
+                "another string"
+                and a third one (unquoted)
+            ]
+        }"#,
+        Guess::StrArray(vo![
+                "abc",
+                "another string",
+                "and a third one (unquoted)",
+        ]),
+    );
 }
