@@ -301,16 +301,13 @@ impl<'de> Deserializer<'de> {
     where
         P: FnOnce(&mut Self) -> Option<T>,
     {
-        let originial_src = self.src;
+        let original_src = self.src;
         let original_pos = self.pos;
-
         let result = parse(self);
-
         if result.is_none() {
-            self.src = originial_src;
+            self.src = original_src;
             self.pos = original_pos;
         }
-
         result
     }
 
@@ -318,14 +315,11 @@ impl<'de> Deserializer<'de> {
     fn try_parse_null(&mut self) -> Option<()> {
         self.try_parse(|this| {
             this.eat_shit().ok()?;
-
             if !this.input().starts_with("null") {
                 return None;
             }
-
             this.advance("null".len());
-
-            this.try_parse_end_of_non_unqouted_string_value()
+            this.try_parse_end_of_non_unquoted_string_value()
         })
     }
 
@@ -333,32 +327,26 @@ impl<'de> Deserializer<'de> {
     fn try_parse_bool(&mut self) -> Option<bool> {
         self.try_parse(|this| {
             let value = this.parse_bool().ok()?;
-
-            this.try_parse_end_of_non_unqouted_string_value()?;
-
+            this.try_parse_end_of_non_unquoted_string_value()?;
             Some(value)
         })
     }
 
     /// Only advances if at the end of a value that is not an unquoted string.
-    fn try_parse_end_of_non_unqouted_string_value(&mut self) -> Option<()> {
+    fn try_parse_end_of_non_unquoted_string_value(&mut self) -> Option<()> {
         self.try_parse(|this| {
             // We are good at EOF
             if this.input().is_empty() {
                 return Some(());
             }
-
             this.eat_shit().ok()?;
-
             // Again, are good at EOF
             if this.input().is_empty() {
                 return Some(());
             }
-
             if let ',' | '}' | ']' | '\r' | '\n' = this.peek_char().ok()? {
                 return Some(());
             }
-
             None
         })
     }
@@ -549,13 +537,10 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
                 if let Some(value) = self.try_parse_bool() {
                     return visitor.visit_bool(value);
                 }
-
                 if self.try_parse_null().is_some() {
                     return visitor.visit_none();
                 }
-
                 let s = self.parse_string_value()?;
-
                 visitor.visit_string(s)
             }
         }

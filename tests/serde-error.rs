@@ -2,8 +2,8 @@ use serde::Deserialize;
 
 #[macro_use] mod common;
 
-// this test checks we're converting serde message errors
-// to errors with some (approximate) position
+/// this test checks we're converting serde message errors
+/// to errors with some (approximate) position
 #[test]
 fn test_no_raw_serde_error() {
     #[derive(Deserialize, PartialEq, Debug)]
