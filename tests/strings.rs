@@ -35,6 +35,7 @@ fn test_weird_map_keys() {
             <none>: 0
             // π: 3.14
             τ: 6.28
+            'τ/2': π
             /: slash // hard one
             \: "" // no trap here
         }
@@ -43,6 +44,7 @@ fn test_weird_map_keys() {
         map: mo!{
             "<none>": "0",
             "τ": "6.28",
+            "τ/2": "π",
             "/": "slash // hard one", // quoteless string values go til line end
             "\\": "",
         },

@@ -89,8 +89,12 @@ fn test_wrapped_guess() {
     guess_wrapped("{gift:false}", Guess::Bool(false));
     guess_wrapped("{gift: true}", Guess::Bool(true));
     guess_wrapped("{gift:'bar'}", string("bar"));
+    guess_wrapped("{ gift : 'bar' }", string("bar"));
     guess_wrapped(r#"{gift:"bar"}"#, string("bar"));
     guess_wrapped("{gift:42}", Guess::U8(42));
+    guess_wrapped("{gift: -2455}", Guess::I16(-2455));
+    guess_wrapped("{gift: -3.5e-48}", Guess::F64(-3.5e-48));
+    guess_wrapped(r#"{gift: [ " 34",] }"#, Guess::StrArray(vo![" 34"]));
     guess_wrapped(
         r#" {
             gift: [
@@ -104,5 +108,17 @@ fn test_wrapped_guess() {
                 "another string",
                 "and a third one (unquoted)",
         ]),
+    );
+    guess_wrapped(
+        r#" {
+            gift: 55 # a comment
+        }"#,
+        Guess::U8(55),
+    );
+    guess_wrapped(
+        r#" {
+            gift: false // comment
+        }"#,
+        Guess::Bool(false),
     );
 }

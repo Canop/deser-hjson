@@ -104,11 +104,13 @@ impl<'de> Deserializer<'de> {
 
     /// what remains to be parsed (including the
     /// character we peeked at, if any)
+    #[inline(always)]
     pub(crate) fn input(&self) -> &'de str {
         &self.src[self.pos..]
     }
 
     /// takes all remaining characters
+    #[inline(always)]
     pub(crate) fn take_all(&mut self) -> &'de str {
         let s = &self.src[self.pos..];
         self.pos = self.src.len();
@@ -116,6 +118,7 @@ impl<'de> Deserializer<'de> {
     }
 
     /// Look at the first character in the input without consuming it.
+    #[inline(always)]
     pub(crate) fn peek_char(&self) -> Result<char> {
         match self.input().chars().next() {
             Some(ch) => Ok(ch),
@@ -123,6 +126,10 @@ impl<'de> Deserializer<'de> {
         }
     }
 
+    /// read bytes_count bytes of a string.
+    /// The validity of pos + bytes_count as a valid UTF8 position must
+    /// have been checked before.
+    #[inline(always)]
     pub(crate) fn take_str(&mut self, bytes_count: usize) -> Result<&str> {
         if self.src.len() >= self.pos + bytes_count {
             let pos = self.pos;
@@ -133,23 +140,42 @@ impl<'de> Deserializer<'de> {
         }
     }
 
+    /// if the next bytes are s, then advance its length and return true
+    /// otherwise return false.
+    /// We do a comparison with a &[u8] to avoid the risk of trying read
+    /// at arbitrary positions and fall between valid UTF8 positions
+    #[inline(always)]
+    pub(crate) fn try_read(&mut self, s: &[u8]) -> bool {
+        if self.src.len() >= self.pos + s.len() {
+            if &self.src.as_bytes()[self.pos..self.pos + s.len()] == s {
+                self.pos += s.len();
+                return true;
+            }
+        }
+        false
+    }
+
     /// return the `len` first bytes of the input, without checking anything
     /// (assuming it has been done) nor consuming anything
+    #[inline(always)]
     pub(crate) fn start(&self, len: usize) -> &'de str {
         &self.src[self.pos..self.pos + len]
     }
 
     /// remove the next character (which is assumed to be ch)
+    #[inline(always)]
     pub(crate) fn drop(&mut self, ch: char) {
         self.advance(ch.len_utf8());
     }
 
     /// advance the cursor (assuming bytes_count is consistent with chars)
+    #[inline(always)]
     pub(crate) fn advance(&mut self, bytes_count: usize) {
         self.pos += bytes_count;
     }
 
     /// Consume the first character in the input.
+    #[inline(always)]
     pub(crate) fn next_char(&mut self) -> Result<char> {
         let ch = self.peek_char()?;
         self.drop(ch);
@@ -158,11 +184,13 @@ impl<'de> Deserializer<'de> {
 
     /// tells whether the next tree bytes are `'''` which
     /// is the start or end of a multiline string literal in Hjson
+    #[inline(always)]
     pub(crate) fn is_at_triple_quote(&self, offset: usize) -> bool {
         self.src.len() >= self.pos + offset + 3
             && &self.src[offset + self.pos..offset + self.pos + 3] == "'''"
     }
 
+    #[inline(always)]
     pub(crate) fn eat_line(&mut self) -> Result<()> {
         self.accept_quoteless_value = true;
         match self.input().find('\n') {
@@ -174,6 +202,7 @@ impl<'de> Deserializer<'de> {
         }
     }
 
+    #[inline(always)]
     pub(crate) fn eat_until_star_slash(&mut self) -> Result<()> {
         match self.input().find("*/") {
             Some(len) => {
@@ -204,6 +233,7 @@ impl<'de> Deserializer<'de> {
         }
     }
 
+    #[inline(always)]
     pub(crate) fn eat_shit(&mut self) -> Result<()> {
         self.eat_shit_and(None)
     }
@@ -260,11 +290,9 @@ impl<'de> Deserializer<'de> {
 
     /// Parse the JSON identifier `true` or `false`.
     fn parse_bool(&mut self) -> Result<bool> {
-        if self.input().starts_with("true") {
-            self.advance("true".len());
+        if self.try_read(b"true") {
             Ok(true)
-        } else if self.input().starts_with("false") {
-            self.advance("false".len());
+        } else if self.try_read(b"false") {
             Ok(false)
         } else {
             self.fail(ExpectedBoolean)
@@ -294,61 +322,6 @@ impl<'de> Deserializer<'de> {
             }
         }
         Ok(self.take_all())
-    }
-
-    /// Only advances if `parse` returns `Some`.
-    fn try_parse<P, T>(&mut self, parse: P) -> Option<T>
-    where
-        P: FnOnce(&mut Self) -> Option<T>,
-    {
-        let original_src = self.src;
-        let original_pos = self.pos;
-        let result = parse(self);
-        if result.is_none() {
-            self.src = original_src;
-            self.pos = original_pos;
-        }
-        result
-    }
-
-    /// Only advances if `null` is parsed successfully.
-    fn try_parse_null(&mut self) -> Option<()> {
-        self.try_parse(|this| {
-            this.eat_shit().ok()?;
-            if !this.input().starts_with("null") {
-                return None;
-            }
-            this.advance("null".len());
-            this.try_parse_end_of_non_unquoted_string_value()
-        })
-    }
-
-    /// Only advances if a boolean is parsed successfully.
-    fn try_parse_bool(&mut self) -> Option<bool> {
-        self.try_parse(|this| {
-            let value = this.parse_bool().ok()?;
-            this.try_parse_end_of_non_unquoted_string_value()?;
-            Some(value)
-        })
-    }
-
-    /// Only advances if at the end of a value that is not an unquoted string.
-    fn try_parse_end_of_non_unquoted_string_value(&mut self) -> Option<()> {
-        self.try_parse(|this| {
-            // We are good at EOF
-            if this.input().is_empty() {
-                return Some(());
-            }
-            this.eat_shit().ok()?;
-            // Again, are good at EOF
-            if this.input().is_empty() {
-                return Some(());
-            }
-            if let ',' | '}' | ']' | '\r' | '\n' = this.peek_char().ok()? {
-                return Some(());
-            }
-            None
-        })
     }
 
     /// read the characters of the coming floating point number, without parsing
@@ -534,11 +507,14 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
             '[' => self.deserialize_seq(visitor),
             '{' => self.deserialize_map(visitor),
             _ => {
-                if let Some(value) = self.try_parse_bool() {
-                    return visitor.visit_bool(value);
-                }
-                if self.try_parse_null().is_some() {
+                if self.try_read(b"null") {
                     return visitor.visit_none();
+                }
+                if self.try_read(b"true") {
+                    return visitor.visit_bool(true);
+                }
+                if self.try_read(b"false") {
+                    return visitor.visit_bool(false);
                 }
                 let s = self.parse_string_value()?;
                 visitor.visit_string(s)
@@ -698,8 +674,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         V: Visitor<'de>,
     {
         self.eat_shit()?;
-        if self.input().starts_with("null") {
-            self.advance("null".len());
+        if self.try_read(b"null") {
             visitor.visit_none()
         } else {
             visitor.visit_some(self)
@@ -712,8 +687,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         V: Visitor<'de>,
     {
         self.eat_shit()?;
-        if self.input().starts_with("null") {
-            self.advance("null".len());
+        if self.try_read(b"null") {
             visitor.visit_unit()
         } else {
             self.fail(ExpectedNull)

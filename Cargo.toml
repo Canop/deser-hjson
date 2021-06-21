@@ -19,3 +19,9 @@ glassbench = "0.3"
 [[bench]]
 name = "parse"
 harness = false
+
+[profile.bench]
+lto = true
+
+[profile.release]
+lto = true
