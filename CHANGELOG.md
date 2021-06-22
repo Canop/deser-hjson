@@ -1,3 +1,8 @@
+<a name="v1.0.1"></a>
+### v1.0.1 - 2021-06-22
+- properly parse single quote strings
+- fix type guessing in some cases for null, false, and true
+
 <a name="v1.0.0"></a>
 ### v1.0.0 - 2021-06-15
 - it's stable. Calling it a 1.0
