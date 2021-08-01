@@ -444,7 +444,7 @@ impl<'de> Deserializer<'de> {
                     self.advance(idx);
                     return Ok(s);
                 }
-                ' ' => {
+                ' ' | '\t' => {
                     let s = self.start(idx);
                     self.advance(idx + 1);
                     return Ok(s);

@@ -1,3 +1,7 @@
+<a name="v1.0.2"></a>
+### v1.0.2 - 2021-07-31
+- fix tab after quoteless map key being read as part of the key
+
 <a name="v1.0.1"></a>
 ### v1.0.1 - 2021-06-22
 - properly parse single quote strings
