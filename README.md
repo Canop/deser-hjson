@@ -64,6 +64,7 @@ let hjson = r#"
 "#;
 // we'll deserialize it into this struct:
 #[derive(Deserialize, PartialEq, Debug)]
+// optionally also add: #[serde(deny_unknown_fields)]
 struct Example {
     key: i32,
     contains: Option<String>,
