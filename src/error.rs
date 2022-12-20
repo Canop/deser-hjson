@@ -64,6 +64,12 @@ pub enum Error {
     RawSerde(String),
 }
 
+impl Error {
+    pub fn is_eof(&self) -> bool {
+        matches!(self, Error::Syntax { code: ErrorCode::Eof, .. })
+    }
+}
+
 impl de::Error for Error {
     fn custom<T: fmt::Display>(msg: T) -> Self {
         Error::RawSerde(msg.to_string())

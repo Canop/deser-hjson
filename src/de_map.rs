@@ -8,11 +8,16 @@ use {
 
 pub struct MapReader<'a, 'de: 'a> {
     de: &'a mut Deserializer<'de>,
+    /// if braceless is true, the map may be closed by an eof instead of a '}'
+    pub braceless: bool,
 }
 
 impl<'a, 'de> MapReader<'a, 'de> {
-    pub fn new(de: &'a mut Deserializer<'de>) -> Self {
-        MapReader { de }
+    pub fn braceless(de: &'a mut Deserializer<'de>) -> Self {
+        MapReader { de, braceless: true }
+    }
+    pub fn within_braces(de: &'a mut Deserializer<'de>) -> Self {
+        MapReader { de, braceless: false }
     }
 }
 
@@ -26,9 +31,21 @@ impl<'de, 'a> MapAccess<'de> for MapReader<'a, 'de> {
     where
         K: DeserializeSeed<'de>,
     {
-        self.de.eat_shit_and(Some(','))?;
-        if self.de.peek_char()? == '}' {
-            return Ok(None);
+        if let Err(e) = self.de.eat_shit_and(Some(',')) {
+            if !self.braceless || !e.is_eof() {
+                return Err(e);
+            }
+        }
+        match self.de.peek_char() {
+            Ok('}') => { return Ok(None); }
+            Err(e) => {
+                if e.is_eof() && self.braceless {
+                    return Ok(None);
+                } else {
+                    return Err(e);
+                }
+            }
+            _ => {}
         }
         // Here's there's a problem: if the key is a string it should be
         // parsed as an identifier but serde will call deserialize_string.
@@ -53,7 +70,11 @@ impl<'de, 'a> MapAccess<'de> for MapReader<'a, 'de> {
         match seed.deserialize(&mut *self.de) {
             Err(e) => self.de.cook_err(e),
             Ok(v) => {
-                self.de.eat_shit_and(Some(','))?;
+                if let Err(e) = self.de.eat_shit_and(Some(',')) {
+                    if !self.braceless || !e.is_eof() {
+                        return Err(e);
+                    }
+                }
                 Ok(v)
             }
         }

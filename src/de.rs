@@ -146,6 +146,7 @@ impl<'de> Deserializer<'de> {
     /// at arbitrary positions and fall between valid UTF8 positions
     #[inline(always)]
     pub(crate) fn try_read(&mut self, s: &[u8]) -> bool {
+        #[allow(clippy::collapsible_if)]
         if self.src.len() >= self.pos + s.len() {
             if &self.src.as_bytes()[self.pos..self.pos + s.len()] == s {
                 self.pos += s.len();
@@ -488,6 +489,24 @@ impl<'de> Deserializer<'de> {
         };
         r
     }
+
+    /// Braceless Hjson: same than usual but not within { and },
+    /// can only be for the whole document
+    fn deserialize_braceless_map<V>(&mut self, visitor: V) -> Result<V::Value>
+    where
+        V: Visitor<'de>,
+    {
+        let mut map_reader = MapReader::braceless(self);
+        map_reader.braceless = true;
+        let value = match visitor.visit_map(map_reader) {
+            Ok(v) => v,
+            Err(e) => {
+                return self.cook_err(e);
+            }
+        };
+        Ok(value)
+    }
+
 }
 
 impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
@@ -710,13 +729,13 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         visitor.visit_newtype_struct(self)
     }
 
-    fn deserialize_seq<V>(mut self, visitor: V) -> Result<V::Value>
+    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
         self.eat_shit()?;
         if self.next_char()? == '[' {
-            let value = visitor.visit_seq(SeqReader::new(&mut self))?;
+            let value = visitor.visit_seq(SeqReader::new(self))?;
             if self.next_char()? == ']' {
                 Ok(value)
             } else {
@@ -746,13 +765,22 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         self.deserialize_seq(visitor)
     }
 
-    fn deserialize_map<V>(mut self, visitor: V) -> Result<V::Value>
+    fn deserialize_map<V>(self, visitor: V) -> Result<V::Value>
     where
         V: Visitor<'de>,
     {
-        self.eat_shit()?;
-        if self.next_char()? == '{' {
-            let value = match visitor.visit_map(MapReader::new(&mut self)) {
+        let on_start = self.pos == 0;
+        if let Err(e) = self.eat_shit() {
+            if on_start && e.is_eof() {
+                return self.deserialize_braceless_map(visitor);
+            } else {
+                return Err(e);
+            }
+        }
+        let ch = self.peek_char()?;
+        if ch == '{' {
+            self.drop(ch);
+            let value = match visitor.visit_map(MapReader::within_braces(self)) {
                 Ok(v) => v,
                 Err(e) => {
                     return self.cook_err(e);
@@ -764,6 +792,8 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
             } else {
                 self.fail(ExpectedMapEnd)
             }
+        } else if on_start {
+            self.deserialize_braceless_map(visitor)
         } else {
             self.fail(ExpectedMap)
         }
