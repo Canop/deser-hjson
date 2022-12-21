@@ -1,3 +1,7 @@
+<a name="v1.1.0"></a>
+### v1.1.0 - 2022-12-21
+- support for braceless Hjson - Fix #7
+
 <a name="v1.0.2"></a>
 ### v1.0.2 - 2021-07-31
 - fix tab after quoteless map key being read as part of the key
