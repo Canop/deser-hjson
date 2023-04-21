@@ -440,7 +440,7 @@ impl<'de> Deserializer<'de> {
         self.eat_shit()?;
         for (idx, ch) in self.input().char_indices() {
             match ch {
-                '"' | ',' | '[' | ']' | '{' | '}' | ':' | '\r'| '\n' => {
+                ',' | '[' | ']' | '{' | '}' | ':' | '\r'| '\n' => {
                     let s = self.start(idx);
                     self.advance(idx);
                     return Ok(s);
