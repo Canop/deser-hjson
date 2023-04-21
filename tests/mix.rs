@@ -1,5 +1,4 @@
 use {
-    deser_hjson,
     serde::{
         de::Error,
         Deserialize,
