@@ -1,3 +1,7 @@
+<a name="v1.1.1"></a>
+### v1.1.1 - 2023-04-22
+- accept quotes in "quoteless" keys - Fix #9
+
 <a name="v1.1.0"></a>
 ### v1.1.0 - 2022-12-21
 - support for braceless Hjson - Fix #7

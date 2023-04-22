@@ -14,7 +14,7 @@
 
 # deser_hjson
 
-This is a Serde 1.0 compatible deserializer for [Hjson](https://hjson.github.io/), tailored for derive powered deserialization.
+This is a Serde deserializer for [Hjson](https://hjson.github.io/), tailored for derive powered deserialization.
 
 Hjson is a good language for a configuration file.
 Such files should be written by a human, read and modified by other humans, then deserialized into a precise structure by a program:
@@ -37,30 +37,28 @@ use {
 };
 // This Hjson document comes from https://hjson.github.io/
 let hjson = r#"
-{
-  // use #, // or /**/ comments,
-  // omit quotes for keys
-  key: 1
-  // omit quotes for strings
-  contains: everything on this line
-  // omit commas at the end of a line
-  cool: {
-    foo: 1
-    bar: 2
-  }
-  // allow trailing commas
-  list: [
-    1,
-    2,
-  ]
-  // and use multiline strings
-  realist:
-    '''
-    My half empty glass,
-    I will fill your empty half.
-    Now you are half full.
-    '''
+// use #, // or /**/ for comments,
+// omit quotes for keys
+key: 1
+// omit quotes for strings
+contains: everything on this line
+// omit commas at the end of a line
+cool: {
+  foo: 1
+  bar: 2
 }
+// allow trailing commas
+list: [
+  1,
+  2,
+]
+// and use multiline strings
+realist:
+  '''
+  My half empty glass,
+  I will fill your empty half.
+  Now you are half full.
+  '''
 "#;
 // we'll deserialize it into this struct:
 #[derive(Deserialize, PartialEq, Debug)]
@@ -91,6 +89,8 @@ assert_eq!(expected, from_str(hjson).unwrap());
 
 * [Broot](https://dystroy.org/broot) can be configured either with TOML or with Hjson (the selection is dynamic, based on the file extension).
 
+* [lemmy](https://github.com/LemmyNet/lemmy) is configured in Hjson
+
 * [Resc](https://github.com/Canop/resc) can be configured either with JSON or with Hjson
 
 In all my tests, deserializing as Hjson was faster than JSON (even with a JSON file) and *much* faster than TOML.
@@ -99,7 +99,7 @@ In all my tests, deserializing as Hjson was faster than JSON (even with a JSON f
 
 ### Does it work with JSON ?
 
-Yes in the sense that any JSON file can be read as Hjson.
+Yes as any JSON file can be read as Hjson.
 
 ### Why only a derive-based deserializer?
 
