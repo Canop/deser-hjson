@@ -66,7 +66,59 @@ mod error;
 
 pub use error::*;
 
-/// deserialize the given string into a type implementing `Deserialize`
+/// Deserialize an instance of type `T` from bytes of Hjson text
+///
+/// # Example
+///
+/// ```
+/// use serde::Deserialize;
+///
+/// #[derive(Deserialize, Debug)]
+/// struct User {
+///     fingerprint: String,
+///     location: String,
+/// }
+///
+/// // The type of `j` is `&[u8]`
+/// let j = b"
+///     fingerprint: 0xF9BA143B95FF6D82
+///     location: Menlo Park, CA
+/// ";
+///
+/// let u: User = deser_hjson::from_slice(j).unwrap();
+/// println!("{:#?}", u);
+/// ```
+pub fn from_slice<T>(bytes: &[u8]) -> Result<T>
+where
+    T: serde::de::DeserializeOwned,
+{
+    let s = std::str::from_utf8(bytes)?;
+    from_str(s)
+}
+
+
+/// Deserialize an instance of type `T` from a string of Hjson text
+///
+/// # Example
+///
+/// ```
+/// use serde::Deserialize;
+///
+/// #[derive(Deserialize, Debug)]
+/// struct User {
+///     hands: Option<u16>,
+///     location: String,
+/// }
+///
+/// // The type of `j` is `&str`
+/// let j = "
+///     hands: 2
+///     location: Menlo Park, CA
+/// ";
+///
+/// let u: User = deser_hjson::from_str(j).unwrap();
+/// println!("{:#?}", u);
+/// ```
 pub fn from_str<T>(s: &str) -> Result<T>
 where
     T: serde::de::DeserializeOwned,

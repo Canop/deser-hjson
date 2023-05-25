@@ -1,6 +1,9 @@
 use {
     serde::de,
-    std::fmt,
+    std::{
+        fmt,
+        str::Utf8Error,
+    },
 };
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -62,6 +65,10 @@ pub enum Error {
     /// convert them to Serde located errors as
     /// much as possible
     RawSerde(String),
+
+    /// an UTF8 error, raised when using from_slice
+    /// with an invalid UTF8 slice
+    Utf8(Utf8Error),
 }
 
 impl Error {
@@ -76,6 +83,12 @@ impl de::Error for Error {
     }
 }
 
+impl From<Utf8Error> for Error {
+    fn from(source: Utf8Error) -> Self {
+        Self::Utf8(source)
+    }
+}
+
 impl fmt::Display for Error {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -87,6 +100,9 @@ impl fmt::Display for Error {
             }
             Self::RawSerde(msg) => {
                 write!(formatter, "error message: {:?}", msg)
+            }
+            Self::Utf8(source) => {
+                source.fmt(formatter)
             }
         }
     }

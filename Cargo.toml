@@ -1,6 +1,6 @@
 [package]
 name = "deser-hjson"
-version = "1.1.1"
+version = "1.2.0"
 authors = ["dystroy <denys.seguret@gmail.com>"]
 repository = "https://github.com/Canop/deser-hjson"
 description = "a Hjson deserializer for Serde"
@@ -14,7 +14,7 @@ readme = "README.md"
 serde = { version = "1.0", features = ["derive"] }
 
 [dev-dependencies]
-glassbench = "0.3"
+glassbench = "0.3.5"
 
 [[bench]]
 name = "parse"

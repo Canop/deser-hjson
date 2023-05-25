@@ -36,6 +36,9 @@ fn test_no_raw_serde_error() {
             }
             Err(deser_hjson::Error::Serde{..}) => {},
             Err(deser_hjson::Error::Syntax{..}) => {},
+            Err(e@deser_hjson::Error::Utf8(_)) => {
+                panic!("Unexpected Utf8 Error: {:?}", e);
+            }
         }
     }
 }

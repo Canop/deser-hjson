@@ -1,3 +1,7 @@
+<a name="v1.2.0"></a>
+### v1.2.0 - 2023-05-25
+- `from_slice` function
+
 <a name="v1.1.1"></a>
 ### v1.1.1 - 2023-04-22
 - accept quotes in "quoteless" keys - Fix #9
