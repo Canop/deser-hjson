@@ -66,6 +66,40 @@ mod error;
 
 pub use error::*;
 
+/// Deserialize an instance of type `T` from a reader of Hjson text
+///
+/// # Example
+///
+/// ```
+/// use serde::Deserialize;
+/// use std::io::Cursor;
+///
+/// #[derive(Deserialize, Debug)]
+/// struct User {
+///     fingerprint: String,
+///     location: String,
+/// }
+///
+/// // The type of `j` is `Cursor` which implements the `Read` trait
+/// let j = Cursor::new("
+///     fingerprint: 0xF9BA143B95FF6D82
+///     location: Menlo Park, CA
+/// ");
+///
+/// let u: User = deser_hjson::from_reader(j).unwrap();
+/// println!("{:#?}", u);
+/// ```
+pub fn from_reader<R, T>(mut reader: R) -> Result<T>
+where
+    R: std::io::Read,
+    T: serde::de::DeserializeOwned,
+{
+    let mut buf = Vec::new();
+    reader.read_to_end(&mut buf)?;
+    from_slice(&buf)
+}
+
+
 /// Deserialize an instance of type `T` from bytes of Hjson text
 ///
 /// # Example
