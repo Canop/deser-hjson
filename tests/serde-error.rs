@@ -39,6 +39,9 @@ fn test_no_raw_serde_error() {
             Err(e@deser_hjson::Error::Utf8(_)) => {
                 panic!("Unexpected Utf8 Error: {:?}", e);
             }
+            Err(e@deser_hjson::Error::Io(_)) => {
+                panic!("Unexpected Io Error: {:?}", e);
+            }
         }
     }
 }

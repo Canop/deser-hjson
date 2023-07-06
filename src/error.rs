@@ -2,6 +2,7 @@ use {
     serde::de,
     std::{
         fmt,
+        io,
         str::Utf8Error,
     },
 };
@@ -42,7 +43,7 @@ pub enum ErrorCode {
     UnexpectedChar,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Debug)]
 pub enum Error {
 
     /// a Hjson syntax error raised in our code,
@@ -69,6 +70,9 @@ pub enum Error {
     /// an UTF8 error, raised when using from_slice
     /// with an invalid UTF8 slice
     Utf8(Utf8Error),
+
+    /// an IO error, raised when using from_reader
+    Io(io::Error),
 }
 
 impl Error {
@@ -89,6 +93,12 @@ impl From<Utf8Error> for Error {
     }
 }
 
+impl From<io::Error> for Error {
+    fn from(source: io::Error) -> Self {
+        Self::Io(source)
+    }
+}
+
 impl fmt::Display for Error {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         match self {
@@ -102,6 +112,9 @@ impl fmt::Display for Error {
                 write!(formatter, "error message: {:?}", msg)
             }
             Self::Utf8(source) => {
+                source.fmt(formatter)
+            }
+            Self::Io(source) => {
                 source.fmt(formatter)
             }
         }
