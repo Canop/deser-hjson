@@ -42,6 +42,9 @@ fn test_no_raw_serde_error() {
             Err(e@deser_hjson::Error::Io(_)) => {
                 panic!("Unexpected Io Error: {:?}", e);
             }
+            Err(e) => {
+                panic!("Unexpected Unknown Error: {:?}", e);
+            }
         }
     }
 }

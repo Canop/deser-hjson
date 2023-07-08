@@ -1,3 +1,7 @@
+### next - 2.0.0
+- `from_reader` function
+- Error type no longer `Clone` and `PartialEq`, flagged `non_exhaustive`
+
 <a name="v1.2.0"></a>
 ### v1.2.0 - 2023-05-25
 - `from_slice` function

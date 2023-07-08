@@ -44,6 +44,7 @@ pub enum ErrorCode {
 }
 
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum Error {
 
     /// a Hjson syntax error raised in our code,
