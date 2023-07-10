@@ -484,7 +484,7 @@ impl<'de> Deserializer<'de> {
         self.accept_quoteless_value = true;
         let r = match ch {
             ',' | ':' | '[' | ']' | '{' | '}' => self.fail(UnexpectedChar),
-            '"' => self.parse_quoted_string(),
+            '"' | '\'' => self.parse_quoted_string(),
             _ => self.parse_quoteless_identifier().map(|s| s.to_string())
         };
         r
@@ -518,7 +518,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     {
         self.eat_shit()?;
         match self.peek_char()? {
-            '"' => self.deserialize_string(visitor),
+            '"' | '\'' => self.deserialize_string(visitor),
             '0'..='9' | '-' => {
                 let number = Number::read(self)?;
                 number.visit(self, visitor)
@@ -822,7 +822,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
     {
         self.eat_shit()?;
         match self.peek_char()? {
-            '"' => {
+            '"' | '\'' => {
                 // Visit a unit variant.
                 visitor.visit_enum(self.parse_quoted_string()?.into_deserializer())
             }
