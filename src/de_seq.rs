@@ -32,7 +32,6 @@ impl<'de, 'a> SeqAccess<'de> for SeqReader<'a, 'de> {
         if self.de.peek_char()? == ']' {
             return Ok(None);
         }
-        // TODO ensure there's either a comma or lf or ] at the end there
         let v = seed.deserialize(&mut *self.de)?;
         self.de.eat_shit_and(Some(','))?;
         Ok(Some(v))
