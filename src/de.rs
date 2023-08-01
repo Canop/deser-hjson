@@ -571,8 +571,16 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         match self.peek_char()? {
             '"' => self.deserialize_string(visitor),
             '0'..='9' | '-' => {
-                let number = Number::read(self)?;
-                number.visit(self, visitor)
+                /* The specification is completely broken because this could be a number
+                 * or a quoteless string, but quoteless strings are ill-defined as
+                 * allowed to have a commas, so we can't actually parse
+                 *   x: abc, y:cdf
+                 * unambiguously and it gets worse if there are spaces:
+                 *   x: 10 39, y:cdf
+                 * So here just attempt to read what looks a valid number, then try
+                 * to parse it and if it fails, treat it as a quoteless string */
+                let number = NumberOrString::read(self)?;
+                number.visit(visitor)
             }
             '[' => self.deserialize_seq(visitor),
             '{' => self.deserialize_map(visitor),
