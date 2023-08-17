@@ -387,10 +387,10 @@ impl<'de> Deserializer<'de> {
             if ch == '\r' || ch == '\n' {
                 let s = self.start(idx);
                 self.advance(idx + 1);
-                return Ok(s);
+                return Ok(s.trim_end());
             }
         }
-        Ok(self.take_all())
+        Ok(self.take_all().trim_end())
     }
 
     /// Parse a string until the next triple quote.
