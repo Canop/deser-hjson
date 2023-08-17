@@ -1,3 +1,7 @@
+<a name="v2.1.0"></a>
+### v2.1.0 - 2023-07-09
+- discard trailing whitespaces in quoteless strings
+
 <a name="v2.0.0"></a>
 ### v2.0.0 - 2023-07-09
 - `from_reader` function
