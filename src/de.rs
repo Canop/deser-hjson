@@ -401,10 +401,61 @@ impl<'de> Deserializer<'de> {
             return self.fail(ExpectedString);
         }
         self.advance(3);
-        self.eat_line()?;
+        // The specification is unclear on whether it is valid to have
+        // text following the ''', as in:
+        //   desc: '''blabla'''
+        // or
+        //   desc: '''blabla
+        //            hello'''
+        // And even worse, what happens to the whitespaces:
+        //   desc: '''   blabla
+        //            hello'''
+        // And what about the whitespace before and after for a single line?
+        //   desc: '''    blabla    '''
+        // The official parser accepts all of them and ignores the spaces before blabla
+        // but not after it so this code reimplements that behaviour.
+
+        let mut v = String::new();
+        // Eat spaces until non-whitespace or newline (but don't eat the newline!).
+        loop {
+            let ch = self.peek_char()?;
+            if ch.is_whitespace() && ch != '\n' {
+                self.drop(ch)
+            } else {
+                break
+            }
+        }
+        // Add characters until new line or '''.
+        let mut first_line_has_characters = false;
+        for (idx, ch) in self.input().char_indices() {
+            match ch {
+                '\'' if self.is_at_triple_quote(idx) => {
+                    self.advance(idx + 3);
+                    // Do not trim string, we keep those whitespaces.
+                    return Ok(v);
+                }
+                '\r' => {
+                    // A \r not followed by a \n is probably not
+                    // valid but I'm not sure an error would be
+                    // more useful here than silently ignoring it.
+                }
+                '\n' => {
+                    // We add a newline only if the first line was non-empty.
+                    if first_line_has_characters {
+                        v.push(ch)
+                    }
+                    self.advance(idx + 1);
+                    break
+                }
+                _ => {
+                    first_line_has_characters = true;
+                    v.push(ch)
+                }
+            }
+        }
+
         // we count the spaces on the first line
         let indent = self.eat_spaces()?;
-        let mut v = String::new();
         let mut line_len = indent;
         for (idx, ch) in self.input().char_indices() {
             match ch {
@@ -520,8 +571,16 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         match self.peek_char()? {
             '"' | '\'' => self.deserialize_string(visitor),
             '0'..='9' | '-' => {
-                let number = Number::read(self)?;
-                number.visit(self, visitor)
+                /* The specification is completely broken because this could be a number
+                 * or a quoteless string, but quoteless strings are ill-defined as
+                 * allowed to have a commas, so we can't actually parse
+                 *   x: abc, y:cdf
+                 * unambiguously and it gets worse if there are spaces:
+                 *   x: 10 39, y:cdf
+                 * So here just attempt to read what looks a valid number, then try
+                 * to parse it and if it fails, treat it as a quoteless string */
+                let number = NumberOrString::read(self)?;
+                number.visit(visitor)
             }
             '[' => self.deserialize_seq(visitor),
             '{' => self.deserialize_map(visitor),
