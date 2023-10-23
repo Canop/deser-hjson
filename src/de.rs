@@ -21,7 +21,7 @@ pub struct Deserializer<'de> {
     // the complete string we received
     src: &'de str,
 
-    // where we're at
+    // where we're at, in bytes
     pos: usize,
 
     // Make it possible to avoid reading a string as a quoteless
@@ -118,34 +118,36 @@ impl<'de> Deserializer<'de> {
     }
 
     // adapted from https://doc.rust-lang.org/src/core/str/validations.rs.html
+    // I don't think it's a problem because no change in UTF8 can be expected
+    // and it makes deserialization about 3% faster compared to using the
+    // public functions
     #[inline(always)]
     pub fn next_code_point(&self) -> Result<(u32, usize)> {
-        if self.pos >= self.src.len() {
+        let bytes = self.src.as_bytes();
+        if self.pos >= bytes.len() {
             return self.fail(Eof);
         }
         // As we start from an already verified UTF8 str, and a valid position,
         // we can safely assume the bytes here are consistent with an UTF8 string
-        let bytes = self.input().as_bytes();
-        let x = bytes[0];
+        let x = bytes[self.pos];
         if x < 128 {
             return Ok(((x as u32), 1));
         }
-        // Multibyte case follows
         // Decode from a byte combination out of: [[[x y] z] w]
         let init = utf8_first_byte(x, 2);
         // SAFETY bytes assumed valid utf8
-        let y = unsafe { *bytes.get_unchecked(1) };
+        let y = unsafe { *bytes.get_unchecked(self.pos+1) };
         let mut ch = utf8_acc_cont_byte(init, y);
         if x >= 0xE0 {
             // [[x y z] w] case
             // 5th bit in 0xE0 .. 0xEF is always clear, so `init` is still valid
-            let z = unsafe { *bytes.get_unchecked(2) };
+            let z = unsafe { *bytes.get_unchecked(self.pos+2) };
             let y_z = utf8_acc_cont_byte((y & CONT_MASK) as u32, z);
             ch = init << 12 | y_z;
             if x >= 0xF0 {
                 // [x y z w] case
                 // use only the lower 3 bits of `init`
-                let w = unsafe { *bytes.get_unchecked(3) };
+                let w = unsafe { *bytes.get_unchecked(self.pos+3) };
                 ch = (init & 7) << 18 | utf8_acc_cont_byte(y_z, w);
                 Ok((ch, 4))
             } else {
@@ -221,25 +223,39 @@ impl<'de> Deserializer<'de> {
         self.pos += bytes_count;
     }
 
-
     /// tells whether the next tree bytes are `'''` which
     /// is the start or end of a multiline string literal in Hjson
     #[inline(always)]
-    pub(crate) fn is_at_triple_quote(&self, offset: usize) -> bool {
+    fn is_at_triple_quote(&self, offset: usize) -> bool {
         self.src.len() >= self.pos + offset + 3
             && &self.src[offset + self.pos..offset + self.pos + 3] == "'''"
     }
 
+    // #[inline(always)]
+    // pub(crate) fn eat_line(&mut self) -> Result<()> {
+    //     self.accept_quoteless_value = true;
+    //     match self.input().find('\n') {
+    //         Some(len) => {
+    //             self.advance(len + 1);
+    //             Ok(())
+    //         }
+    //         None => self.fail(Eof),
+    //     }
+    // }
+
     #[inline(always)]
-    pub(crate) fn eat_line(&mut self) -> Result<()> {
+    fn eat_line(&mut self) -> Result<()> {
         self.accept_quoteless_value = true;
-        match self.input().find('\n') {
-            Some(len) => {
-                self.advance(len + 1);
-                Ok(())
+        let bytes = self.src.as_bytes();
+        unsafe {
+            for i in self.pos..bytes.len() {
+                if *bytes.get_unchecked(i) == b'\n' {
+                    self.advance(i - self.pos + 1);
+                    return Ok(());
+                }
             }
-            None => self.fail(Eof),
         }
+        self.fail(Eof)
     }
 
     #[inline(always)]
@@ -260,15 +276,19 @@ impl<'de> Deserializer<'de> {
         let mut eaten_chars = 0;
         loop {
             let ch = self.peek_char()?;
-            if ch == '\n' {
-                self.accept_quoteless_value = true;
-                self.advance(1);
-                eaten_chars = 0;
-            } else if ch.is_whitespace() {
-                self.drop(ch);
-                eaten_chars += 1
-            } else {
-                return Ok(eaten_chars);
+            match ch {
+                '\n' => {
+                    self.accept_quoteless_value = true;
+                    self.advance(1);
+                    eaten_chars = 0;
+                }
+                ' ' | '\t'| '\x0C' | '\r' => {
+                    self.advance(1);
+                    eaten_chars += 1
+                }
+                _ => {
+                    return Ok(eaten_chars);
+                }
             }
         }
     }
@@ -426,9 +446,7 @@ impl<'de> Deserializer<'de> {
     /// Parse a string until the next unescaped quote
     fn parse_quoted_string(&mut self) -> Result<String> {
         let mut s = String::new();
-
         let starting_quote = self.next_char()?;
-
         loop {
             let mut c = self.next_char()?;
             if c == starting_quote {
@@ -513,7 +531,7 @@ impl<'de> Deserializer<'de> {
         self.fail(Eof) // it's not legal to not have the triple quotes
     }
 
-    /// parse an identifier without quotes:
+    /// Parse an identifier without quotes:
     /// - map key
     /// - enum variant
     fn parse_quoteless_identifier(&mut self) -> Result<&'de str> {
