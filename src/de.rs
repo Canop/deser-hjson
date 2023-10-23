@@ -117,13 +117,59 @@ impl<'de> Deserializer<'de> {
         s
     }
 
+    // adapted from https://doc.rust-lang.org/src/core/str/validations.rs.html
+    #[inline(always)]
+    pub fn next_code_point(&self) -> Result<(u32, usize)> {
+        if self.pos >= self.src.len() {
+            return self.fail(Eof);
+        }
+        // As we start from an already verified UTF8 str, and a valid position,
+        // we can safely assume the bytes here are consistent with an UTF8 string
+        let bytes = self.input().as_bytes();
+        let x = bytes[0];
+        if x < 128 {
+            return Ok(((x as u32), 1));
+        }
+        // Multibyte case follows
+        // Decode from a byte combination out of: [[[x y] z] w]
+        let init = utf8_first_byte(x, 2);
+        // SAFETY bytes assumed valid utf8
+        let y = unsafe { *bytes.get_unchecked(1) };
+        let mut ch = utf8_acc_cont_byte(init, y);
+        if x >= 0xE0 {
+            // [[x y z] w] case
+            // 5th bit in 0xE0 .. 0xEF is always clear, so `init` is still valid
+            let z = unsafe { *bytes.get_unchecked(2) };
+            let y_z = utf8_acc_cont_byte((y & CONT_MASK) as u32, z);
+            ch = init << 12 | y_z;
+            if x >= 0xF0 {
+                // [x y z w] case
+                // use only the lower 3 bits of `init`
+                let w = unsafe { *bytes.get_unchecked(3) };
+                ch = (init & 7) << 18 | utf8_acc_cont_byte(y_z, w);
+                Ok((ch, 4))
+            } else {
+                Ok((ch, 3))
+            }
+        } else {
+            Ok((ch, 2))
+        }
+    }
+
     /// Look at the first character in the input without consuming it.
     #[inline(always)]
     pub(crate) fn peek_char(&self) -> Result<char> {
-        match self.input().chars().next() {
-            Some(ch) => Ok(ch),
-            _ => self.fail(Eof),
-        }
+        self.next_code_point()
+            .map(|(code, _)| unsafe { char::from_u32_unchecked(code) })
+    }
+
+    /// Consume the first character in the input.
+    #[inline(always)]
+    pub(crate) fn next_char(&mut self) -> Result<char> {
+        let (code, len) = self.next_code_point()?;
+        self.pos += len;
+        let ch = unsafe { char::from_u32_unchecked(code) };
+        Ok(ch)
     }
 
     /// read bytes_count bytes of a string.
@@ -175,13 +221,6 @@ impl<'de> Deserializer<'de> {
         self.pos += bytes_count;
     }
 
-    /// Consume the first character in the input.
-    #[inline(always)]
-    pub(crate) fn next_char(&mut self) -> Result<char> {
-        let ch = self.peek_char()?;
-        self.drop(ch);
-        Ok(ch)
-    }
 
     /// tells whether the next tree bytes are `'''` which
     /// is the start or end of a multiline string literal in Hjson
@@ -898,3 +937,20 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         self.deserialize_any(visitor)
     }
 }
+
+/// Returns the initial codepoint accumulator for the first byte.
+/// The first byte is special, only want bottom 5 bits for width 2, 4 bits
+/// for width 3, and 3 bits for width 4.
+#[inline]
+const fn utf8_first_byte(byte: u8, width: u32) -> u32 {
+    (byte & (0x7F >> width)) as u32
+}
+
+/// Returns the value of `ch` updated with continuation byte `byte`.
+#[inline]
+const fn utf8_acc_cont_byte(ch: u32, byte: u8) -> u32 {
+    (ch << 6) | (byte & CONT_MASK) as u32
+}
+
+/// Mask of the value bits of a continuation byte.
+const CONT_MASK: u8 = 0b0011_1111;
