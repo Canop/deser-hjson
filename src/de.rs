@@ -223,7 +223,7 @@ impl<'de> Deserializer<'de> {
             let ch = self.peek_char()?;
             if ch == '\n' {
                 self.accept_quoteless_value = true;
-                self.drop(ch);
+                self.advance(1);
                 eaten_chars = 0;
             } else if ch.is_whitespace() {
                 self.drop(ch);
@@ -236,7 +236,48 @@ impl<'de> Deserializer<'de> {
 
     #[inline(always)]
     pub(crate) fn eat_shit(&mut self) -> Result<()> {
-        self.eat_shit_and(None)
+        let mut last_is_slash = false;
+        loop {
+            let ch = self.peek_char()?;
+            match ch {
+                '#' => {
+                    self.eat_line()?;
+                    last_is_slash = false;
+                }
+                '*' => {
+                    if last_is_slash {
+                        self.eat_until_star_slash()?;
+                    } else {
+                        self.advance(1);
+                    }
+                    last_is_slash = false;
+                }
+                '/' => {
+                    if last_is_slash {
+                        self.eat_line()?;
+                        last_is_slash = false;
+                    } else {
+                        self.advance(1);
+                        last_is_slash = true;
+                    }
+                }
+                '\n' => {
+                    self.accept_quoteless_value = true;
+                    self.advance(1);
+                    last_is_slash = false;
+                }
+                _ if ch.is_whitespace() => {
+                    self.drop(ch);
+                    last_is_slash = false;
+                }
+                _ => {
+                    if last_is_slash {
+                        self.pos -= 1;
+                    }
+                    return Ok(());
+                }
+            }
+        }
     }
 
     pub(crate) fn eat_shit_and(&mut self, mut including: Option<char>) -> Result<()> {
@@ -252,7 +293,7 @@ impl<'de> Deserializer<'de> {
                     if last_is_slash {
                         self.eat_until_star_slash()?;
                     } else {
-                        self.drop(ch);
+                        self.advance(1);
                     }
                     last_is_slash = false;
                 }
@@ -261,13 +302,13 @@ impl<'de> Deserializer<'de> {
                         self.eat_line()?;
                         last_is_slash = false;
                     } else {
-                        self.drop(ch);
+                        self.advance(1);
                         last_is_slash = true;
                     }
                 }
                 '\n' => {
                     self.accept_quoteless_value = true;
-                    self.drop(ch);
+                    self.advance(1);
                     last_is_slash = false;
                 }
                 _ if including == Some(ch) => {
