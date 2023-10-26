@@ -15,6 +15,8 @@ fn test_string() {
     assert_eq!(W{c:"test".to_string()}, from_str("{c:test\n}").unwrap());
     assert_eq!(W{c:"test".to_string()}, from_str("{c:\"test\"}").unwrap());
     assert_eq!(W{c:"test".to_string()}, from_str("{c:'test'}").unwrap());
+    assert_eq!(W{c:"test".to_string()}, from_str("{'c':'test'}").unwrap());
+    assert_eq!(W{c:"test".to_string()}, from_str("{\"c\":'test'}").unwrap());
     assert_eq!(
         W {c:"xterm -e \"vi /some/path\"".to_string()},
         from_str(r#"{
@@ -51,4 +53,3 @@ fn test_weird_map_keys() {
     };
     assert_eq!(value, from_str(hjson).unwrap());
 }
-

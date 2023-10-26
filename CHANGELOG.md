@@ -1,3 +1,7 @@
+<a name="v2.2.0"></a>
+### v2.2.0 - 2023-09-09
+- Allow single-quoted identifiers and enum values - thanks @jwnrt
+
 <a name="v2.1.0"></a>
 ### v2.1.0 - 2023-07-09
 - discard trailing whitespaces in quoteless strings
