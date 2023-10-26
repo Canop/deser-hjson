@@ -63,6 +63,7 @@ mod de_map;
 mod de_number;
 mod de_seq;
 mod error;
+mod utf8;
 
 pub use error::*;
 

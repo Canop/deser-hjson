@@ -11,6 +11,7 @@ use {
             ErrorCode::{self, *},
             Result,
         },
+        utf8::*,
     },
     serde::de::{self, IntoDeserializer, Visitor},
 };
@@ -44,6 +45,7 @@ impl<'de> Deserializer<'de> {
     }
 
     /// compute the number of lines and columns to current pos
+    #[cold]
     fn location(&self) -> (usize, usize) {
         let (mut line, mut col) = (1, 1);
         for ch in self.src[..self.pos].chars() {
@@ -58,6 +60,7 @@ impl<'de> Deserializer<'de> {
     }
 
     /// build a syntax error
+    #[cold]
     pub(crate) fn err(&self, code: ErrorCode) -> Error {
         let (line, col) = self.location();
         // we'll show the next 15 chars in the error message
@@ -71,6 +74,7 @@ impl<'de> Deserializer<'de> {
     }
 
     /// convert a serde raised error into one with precise location
+    #[cold]
     pub(crate) fn cook_err<T>(&self, err: Error) -> Result<T> {
         match err {
             Error::RawSerde(message) => {
@@ -87,6 +91,7 @@ impl<'de> Deserializer<'de> {
         }
     }
 
+    #[cold]
     pub(crate) fn fail<T>(&self, code: ErrorCode) -> Result<T> {
         Err(self.err(code))
     }
@@ -117,12 +122,11 @@ impl<'de> Deserializer<'de> {
         s
     }
 
+    /// Return the next code point and its byte size, without
+    /// advancing the cursor
     // adapted from https://doc.rust-lang.org/src/core/str/validations.rs.html
-    // I don't think it's a problem because no change in UTF8 can be expected
-    // and it makes deserialization about 3% faster compared to using the
-    // public functions
-    #[inline(always)]
-    pub fn next_code_point(&self) -> Result<(u32, usize)> {
+    #[inline]
+    fn peek_code_point(&self) -> Result<(u32, usize)> {
         let bytes = self.src.as_bytes();
         if self.pos >= bytes.len() {
             return self.fail(Eof);
@@ -158,17 +162,39 @@ impl<'de> Deserializer<'de> {
         }
     }
 
+    #[inline]
+    fn peek_byte(&self) -> Result<u8> {
+        let bytes = self.src.as_bytes();
+        if self.pos >= bytes.len() {
+            self.fail(Eof)
+        } else {
+            Ok(bytes[self.pos])
+        }
+    }
+
+    #[inline]
+    fn next_byte(&mut self) -> Result<u8> {
+        let bytes = self.src.as_bytes();
+        if self.pos >= bytes.len() {
+            self.fail(Eof)
+        } else {
+            let b = bytes[self.pos];
+            self.pos += 1;
+            Ok(b)
+        }
+    }
+
     /// Look at the first character in the input without consuming it.
-    #[inline(always)]
+    #[inline]
     pub(crate) fn peek_char(&self) -> Result<char> {
-        self.next_code_point()
+        self.peek_code_point()
             .map(|(code, _)| unsafe { char::from_u32_unchecked(code) })
     }
 
     /// Consume the first character in the input.
-    #[inline(always)]
+    #[inline]
     pub(crate) fn next_char(&mut self) -> Result<char> {
-        let (code, len) = self.next_code_point()?;
+        let (code, len) = self.peek_code_point()?;
         self.pos += len;
         let ch = unsafe { char::from_u32_unchecked(code) };
         Ok(ch)
@@ -177,7 +203,7 @@ impl<'de> Deserializer<'de> {
     /// read bytes_count bytes of a string.
     /// The validity of pos + bytes_count as a valid UTF8 position must
     /// have been checked before.
-    #[inline(always)]
+    #[inline]
     pub(crate) fn take_str(&mut self, bytes_count: usize) -> Result<&str> {
         if self.src.len() >= self.pos + bytes_count {
             let pos = self.pos;
@@ -192,7 +218,7 @@ impl<'de> Deserializer<'de> {
     /// otherwise return false.
     /// We do a comparison with a &[u8] to avoid the risk of trying read
     /// at arbitrary positions and fall between valid UTF8 positions
-    #[inline(always)]
+    #[inline]
     pub(crate) fn try_read(&mut self, s: &[u8]) -> bool {
         #[allow(clippy::collapsible_if)]
         if self.src.len() >= self.pos + s.len() {
@@ -206,44 +232,32 @@ impl<'de> Deserializer<'de> {
 
     /// return the `len` first bytes of the input, without checking anything
     /// (assuming it has been done) nor consuming anything
-    #[inline(always)]
+    #[inline]
     pub(crate) fn start(&self, len: usize) -> &'de str {
         &self.src[self.pos..self.pos + len]
     }
 
     /// remove the next character (which is assumed to be ch)
-    #[inline(always)]
+    #[inline]
     pub(crate) fn drop(&mut self, ch: char) {
         self.advance(ch.len_utf8());
     }
 
     /// advance the cursor (assuming bytes_count is consistent with chars)
-    #[inline(always)]
+    #[inline]
     pub(crate) fn advance(&mut self, bytes_count: usize) {
         self.pos += bytes_count;
     }
 
     /// tells whether the next tree bytes are `'''` which
     /// is the start or end of a multiline string literal in Hjson
-    #[inline(always)]
+    #[inline]
     fn is_at_triple_quote(&self, offset: usize) -> bool {
         self.src.len() >= self.pos + offset + 3
             && &self.src[offset + self.pos..offset + self.pos + 3] == "'''"
     }
 
-    // #[inline(always)]
-    // pub(crate) fn eat_line(&mut self) -> Result<()> {
-    //     self.accept_quoteless_value = true;
-    //     match self.input().find('\n') {
-    //         Some(len) => {
-    //             self.advance(len + 1);
-    //             Ok(())
-    //         }
-    //         None => self.fail(Eof),
-    //     }
-    // }
-
-    #[inline(always)]
+    #[inline]
     fn eat_line(&mut self) -> Result<()> {
         self.accept_quoteless_value = true;
         let bytes = self.src.as_bytes();
@@ -258,7 +272,7 @@ impl<'de> Deserializer<'de> {
         self.fail(Eof)
     }
 
-    #[inline(always)]
+    #[inline]
     pub(crate) fn eat_until_star_slash(&mut self) -> Result<()> {
         match self.input().find("*/") {
             Some(len) => {
@@ -270,40 +284,40 @@ impl<'de> Deserializer<'de> {
     }
 
     /// advance until the first non space character and
-    /// return the number of eaten characters in the last
-    /// line
+    /// return the number of eaten bytes in the last
+    /// line (which is the number of chars as the only
+    /// whitespaces in Hjson are 1 byte long)
     pub(crate) fn eat_spaces(&mut self) -> Result<usize> {
-        let mut eaten_chars = 0;
+        let mut eaten_bytes = 0;
         loop {
-            let ch = self.peek_char()?;
-            match ch {
-                '\n' => {
+            let b = self.peek_byte()?;
+            match b {
+                b'\n' => {
                     self.accept_quoteless_value = true;
                     self.advance(1);
-                    eaten_chars = 0;
+                    eaten_bytes = 0;
                 }
-                ' ' | '\t'| '\x0C' | '\r' => {
+                b' ' | b'\t'| b'\x0C' | b'\r' => {
                     self.advance(1);
-                    eaten_chars += 1
+                    eaten_bytes += 1
                 }
                 _ => {
-                    return Ok(eaten_chars);
+                    return Ok(eaten_bytes);
                 }
             }
         }
     }
 
-    #[inline(always)]
+    #[inline]
     pub(crate) fn eat_shit(&mut self) -> Result<()> {
         let mut last_is_slash = false;
         loop {
-            let ch = self.peek_char()?;
-            match ch {
-                '#' => {
+            match self.peek_byte()? {
+                b'#' => {
                     self.eat_line()?;
                     last_is_slash = false;
                 }
-                '*' => {
+                b'*' => {
                     if last_is_slash {
                         self.eat_until_star_slash()?;
                     } else {
@@ -311,7 +325,7 @@ impl<'de> Deserializer<'de> {
                     }
                     last_is_slash = false;
                 }
-                '/' => {
+                b'/' => {
                     if last_is_slash {
                         self.eat_line()?;
                         last_is_slash = false;
@@ -320,17 +334,18 @@ impl<'de> Deserializer<'de> {
                         last_is_slash = true;
                     }
                 }
-                '\n' => {
+                b'\n' => {
                     self.accept_quoteless_value = true;
                     self.advance(1);
                     last_is_slash = false;
                 }
-                _ if ch.is_whitespace() => {
-                    self.drop(ch);
+                b' ' | b'\t'| b'\x0C' | b'\r' => { // Hjson whitespaces
+                    self.advance(1);
                     last_is_slash = false;
                 }
                 _ => {
                     if last_is_slash {
+                        // we don't consume the /: it's the start of a string
                         self.pos -= 1;
                     }
                     return Ok(());
@@ -402,17 +417,21 @@ impl<'de> Deserializer<'de> {
 
     /// read the characters of the coming integer, without parsing the
     /// resulting string
+    #[inline]
     fn read_integer(&mut self, unsigned: bool) -> Result<&'de str> {
+        // parsing could be done in the same loop but then I would have
+        // to handle overflow
         self.eat_shit()?;
-        for (idx, ch) in self.input().char_indices() {
-            match ch {
-                '-' if unsigned => {
+        let bytes = self.src.as_bytes();
+        for (idx, b) in bytes.iter().skip(self.pos).enumerate() {
+            match b {
+                b'-' if unsigned => {
                     return self.fail(ExpectedPositiveInteger);
                 }
-                '-' if idx > 0 => {
+                b'-' if idx > 0 => {
                     return self.fail(UnexpectedChar);
                 }
-                '0'..='9' | '-' => {
+                b'0'..=b'9' | b'-' => {
                     // if it's too long, this will be handled at conversion
                 }
                 _ => {
@@ -426,11 +445,13 @@ impl<'de> Deserializer<'de> {
     }
 
     /// read the characters of the coming floating point number, without parsing
+    #[inline]
     fn read_float(&mut self) -> Result<&'de str> {
         self.eat_shit()?;
-        for (idx, ch) in self.input().char_indices() {
-            match ch {
-                '0'..='9' | '-' | '+' | '.' | 'e' | 'E' => {
+        let bytes = &self.src.as_bytes()[self.pos..];
+        for (idx, b) in bytes.iter().enumerate() {
+            match b {
+                b'0'..=b'9' | b'-' | b'+' | b'.' | b'e' | b'E' => {
                     // if it's invalid, this will be handled at conversion
                 }
                 _ => {
@@ -444,6 +465,7 @@ impl<'de> Deserializer<'de> {
     }
 
     /// Parse a string until the next unescaped quote
+    #[inline]
     fn parse_quoted_string(&mut self) -> Result<String> {
         let mut s = String::new();
         let starting_quote = self.next_char()?;
@@ -452,17 +474,17 @@ impl<'de> Deserializer<'de> {
             if c == starting_quote {
                 break;
             } else if c == '\\' {
-                c = match self.next_char()? {
-                    '\"' => '\"',
-                    '\'' => '\'',
-                    '\\' => '\\',
-                    '/' => '/',
-                    'b' => '\x08', // why did they put this in JSON ?
-                    'f' => '\x0c', // and this one ?!
-                    'n' => '\n',
-                    'r' => '\r',
-                    't' => '\t',
-                    'u' => {
+                c = match self.next_byte()? {
+                    b'\"' => '\"',
+                    b'\'' => '\'',
+                    b'\\' => '\\',
+                    b'/' => '/',
+                    b'b' => '\x08', // why did they put this in JSON ?
+                    b'f' => '\x0c', // and this one ?!
+                    b'n' => '\n',
+                    b'r' => '\r',
+                    b't' => '\t',
+                    b'u' => {
                         self.take_str(4).ok()
                             .and_then(|s| u32::from_str_radix(s, 16).ok())
                             .and_then(std::char::from_u32)
@@ -574,15 +596,16 @@ impl<'de> Deserializer<'de> {
         v
     }
 
+    #[inline]
     fn parse_identifier(&mut self) -> Result<String> {
         self.eat_shit()?;
-        let ch = self.peek_char()?;
+        let b = self.peek_byte()?;
         // we set accept_quoteless_value to true so that a quoteless
         // string can be accepted *after* the current identifier
         self.accept_quoteless_value = true;
-        let r = match ch {
-            ',' | ':' | '[' | ']' | '{' | '}' => self.fail(UnexpectedChar),
-            '"' => self.parse_quoted_string(),
+        let r = match b {
+            b',' | b':' | b'[' | b']' | b'{' | b'}' => self.fail(UnexpectedChar),
+            b'"' => self.parse_quoted_string(),
             _ => self.parse_quoteless_identifier().map(|s| s.to_string())
         };
         r
@@ -955,20 +978,3 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         self.deserialize_any(visitor)
     }
 }
-
-/// Returns the initial codepoint accumulator for the first byte.
-/// The first byte is special, only want bottom 5 bits for width 2, 4 bits
-/// for width 3, and 3 bits for width 4.
-#[inline]
-const fn utf8_first_byte(byte: u8, width: u32) -> u32 {
-    (byte & (0x7F >> width)) as u32
-}
-
-/// Returns the value of `ch` updated with continuation byte `byte`.
-#[inline]
-const fn utf8_acc_cont_byte(ch: u32, byte: u8) -> u32 {
-    (ch << 6) | (byte & CONT_MASK) as u32
-}
-
-/// Mask of the value bits of a continuation byte.
-const CONT_MASK: u8 = 0b0011_1111;

@@ -66,7 +66,6 @@ impl<'de, 'a> MapAccess<'de> for MapReader<'a, 'de> {
     where
         V: DeserializeSeed<'de>,
     {
-        self.de.eat_shit()?;
         match seed.deserialize(&mut *self.de) {
             Err(e) => self.de.cook_err(e),
             Ok(v) => {
