@@ -1,6 +1,6 @@
 [package]
 name = "deser-hjson"
-version = "2.2.0"
+version = "2.2.1-dev"
 authors = ["dystroy <denys.seguret@gmail.com>"]
 repository = "https://github.com/Canop/deser-hjson"
 description = "a Hjson deserializer for Serde"
