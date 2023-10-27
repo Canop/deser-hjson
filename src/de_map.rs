@@ -36,8 +36,8 @@ impl<'de, 'a> MapAccess<'de> for MapReader<'a, 'de> {
                 return Err(e);
             }
         }
-        match self.de.peek_char() {
-            Ok('}') => { return Ok(None); }
+        match self.de.peek_byte() {
+            Ok(b'}') => { return Ok(None); }
             Err(e) => {
                 if e.is_eof() && self.braceless {
                     return Ok(None);
@@ -54,7 +54,7 @@ impl<'de, 'a> MapAccess<'de> for MapReader<'a, 'de> {
         self.de.accept_quoteless_value = false;
         let v = seed.deserialize(&mut *self.de)?;
         self.de.eat_shit()?;
-        if self.de.next_char()? == ':' {
+        if self.de.next_byte()? == b':' {
             Ok(Some(v))
         } else {
             self.de.fail(ExpectedMapColon)
@@ -66,7 +66,6 @@ impl<'de, 'a> MapAccess<'de> for MapReader<'a, 'de> {
     where
         V: DeserializeSeed<'de>,
     {
-        self.de.eat_shit()?;
         match seed.deserialize(&mut *self.de) {
             Err(e) => self.de.cook_err(e),
             Ok(v) => {

@@ -8,6 +8,9 @@ fn array() {
     let arr: Vec<u8> = deser_hjson::from_str("[5, 3]").unwrap();
     assert_eq!(arr, vec![5, 3]);
 
+    let arr: Vec<u8> = deser_hjson::from_str(" [ 5 ,\n  3  ] ").unwrap();
+    assert_eq!(arr, vec![5, 3]);
+
     // A quoteless string goes til the end of the line.
     // It means than a string in an array must either be quoted
     // or go til the end of the line. The following array contains

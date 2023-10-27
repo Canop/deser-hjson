@@ -93,8 +93,6 @@ assert_eq!(expected, from_str(hjson).unwrap());
 
 * [Resc](https://github.com/Canop/resc) can be configured either with JSON or with Hjson
 
-In all my tests, deserializing as Hjson was faster than JSON (even with a JSON file) and *much* faster than TOML.
-
 ## FAQ
 
 ### Does it work with JSON ?
