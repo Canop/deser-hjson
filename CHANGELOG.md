@@ -1,4 +1,5 @@
-### next
+<a name="v2.2.1"></a>
+### v2.2.1 - 2023-10-27
 - performance improvements
 
 <a name="v2.2.0"></a>

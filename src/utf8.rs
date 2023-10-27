@@ -1,5 +1,5 @@
 //! functions taken, without change, from
-//! https://doc.rust-lang.org/src/core/str/validations.rs.html
+//! <https://doc.rust-lang.org/src/core/str/validations.rs.html>
 
 /// Returns the initial codepoint accumulator for the first byte.
 /// The first byte is special, only want bottom 5 bits for width 2, 4 bits
