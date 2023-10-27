@@ -41,6 +41,8 @@ fn test_struct() {
         txt3: String,
         seq: Vec<String>,
         enum_map: HashMap<String, Enum>,
+        numbers1: Vec<u32>,
+        numbers2: Vec<i16>,
     }
     let hjson = r#"
     {
@@ -74,6 +76,14 @@ fn test_struct() {
         # order of keys doesn't matter and you can
         # have a single value after a map
         float: -5.7
+
+        numbers1: [ 559999,   87, 45,],
+        numbers2: [
+            -32
+            876
+            -111
+            582
+        ]
     }
     "#;
     let mut enum_map = HashMap::new();
@@ -87,6 +97,8 @@ fn test_struct() {
         txt3: "you can have multiline strings\nand they're free of unexpected spacing".to_owned(),
         seq: vo!["another quoteless string", "b1\nb2", "c"],
         enum_map,
+        numbers1: vec![559999, 87, 45],
+        numbers2: vec![-32, 876, -111, 582],
     };
     assert_eq!(expected, deser_hjson::from_str(hjson).unwrap());
 }
