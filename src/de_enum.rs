@@ -34,7 +34,7 @@ impl<'de, 'a> EnumAccess<'de> for EnumReader<'a, 'de> {
         // the key of the map.
         let val = seed.deserialize(&mut *self.de)?;
         self.de.eat_shit()?;
-        if self.de.next_char()? == ':' {
+        if self.de.next_byte()? == b':' {
             Ok((val, self))
         } else {
             self.de.fail(ExpectedMapColon)

@@ -28,7 +28,7 @@ impl<'de, 'a> SeqAccess<'de> for SeqReader<'a, 'de> {
     where
         T: DeserializeSeed<'de>,
     {
-        if self.de.peek_char()? == ']' {
+        if self.de.peek_byte()? == b']' {
             return Ok(None);
         }
         let v = seed.deserialize(&mut *self.de)?;

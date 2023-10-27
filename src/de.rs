@@ -122,8 +122,7 @@ impl<'de> Deserializer<'de> {
         s
     }
 
-    /// Return the next code point and its byte size, without
-    /// advancing the cursor
+    /// return the next code point and its byte size, without advancing the cursor
     // adapted from https://doc.rust-lang.org/src/core/str/validations.rs.html
     #[inline]
     fn peek_code_point(&self) -> Result<(u32, usize)> {
@@ -162,8 +161,10 @@ impl<'de> Deserializer<'de> {
         }
     }
 
+    /// return the next byte (or an error on EOF).
+    /// There's no guarantee the byte is a whole char
     #[inline]
-    fn peek_byte(&self) -> Result<u8> {
+    pub(crate) fn peek_byte(&self) -> Result<u8> {
         let bytes = self.src.as_bytes();
         if self.pos >= bytes.len() {
             self.fail(Eof)
@@ -172,8 +173,10 @@ impl<'de> Deserializer<'de> {
         }
     }
 
+    /// Return the next byte (at position pos). As it advances the cursor,
+    /// caller MUST throw an error if the byte isn't a valid full character.
     #[inline]
-    fn next_byte(&mut self) -> Result<u8> {
+    pub(crate) fn next_byte(&mut self) -> Result<u8> {
         let bytes = self.src.as_bytes();
         if self.pos >= bytes.len() {
             self.fail(Eof)
@@ -201,6 +204,7 @@ impl<'de> Deserializer<'de> {
     }
 
     /// read bytes_count bytes of a string.
+    ///
     /// The validity of pos + bytes_count as a valid UTF8 position must
     /// have been checked before.
     #[inline]
@@ -308,6 +312,8 @@ impl<'de> Deserializer<'de> {
         }
     }
 
+    /// consume spaces, new lines, comments, and stop before
+    /// first interesting char
     #[inline]
     pub(crate) fn eat_shit(&mut self) -> Result<()> {
         let mut last_is_slash = false;
@@ -580,11 +586,11 @@ impl<'de> Deserializer<'de> {
     /// (i.e. not an map key or variant identifier )
     fn parse_string_value(&mut self) -> Result<String> {
         self.eat_shit()?;
-        let ch = self.peek_char()?;
-        let v = match ch {
-            ',' | ':' | '[' | ']' | '{' | '}' => self.fail(UnexpectedChar),
-            '\'' if self.is_at_triple_quote(0) => self.parse_multiline_string(),
-            '"' | '\'' => self.parse_quoted_string(),
+        let b = self.peek_byte()?;
+        let v = match b {
+            b',' | b':' | b'[' | b']' | b'{' | b'}' => self.fail(UnexpectedChar),
+            b'\'' if self.is_at_triple_quote(0) => self.parse_multiline_string(),
+            b'"' | b'\'' => self.parse_quoted_string(),
             _ => (if self.accept_quoteless_value {
                 self.parse_quoteless_str()
             } else {
@@ -638,14 +644,14 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         V: Visitor<'de>,
     {
         self.eat_shit()?;
-        match self.peek_char()? {
-            '"' | '\'' => self.deserialize_string(visitor),
-            '0'..='9' | '-' => {
+        match self.peek_byte()? {
+            b'"' | b'\'' => self.deserialize_string(visitor),
+            b'0'..=b'9' | b'-' => {
                 let number = Number::read(self)?;
                 number.visit(self, visitor)
             }
-            '[' => self.deserialize_seq(visitor),
-            '{' => self.deserialize_map(visitor),
+            b'[' => self.deserialize_seq(visitor),
+            b'{' => self.deserialize_map(visitor),
             _ => {
                 if self.try_read(b"null") {
                     return visitor.visit_none();
@@ -855,9 +861,9 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         V: Visitor<'de>,
     {
         self.eat_shit()?;
-        if self.next_char()? == '[' {
+        if self.next_byte()? == b'[' {
             let value = visitor.visit_seq(SeqReader::new(self))?;
-            if self.next_char()? == ']' {
+            if self.next_byte()? == b']' {
                 Ok(value)
             } else {
                 self.fail(ExpectedArrayEnd)
@@ -898,9 +904,8 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
                 return Err(e);
             }
         }
-        let ch = self.peek_char()?;
-        if ch == '{' {
-            self.drop(ch);
+        if self.peek_byte()? == b'{' {
+            self.advance(1);
             let value = match visitor.visit_map(MapReader::within_braces(self)) {
                 Ok(v) => v,
                 Err(e) => {
@@ -908,7 +913,7 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
                 }
             };
             self.eat_shit()?;
-            if self.next_char()? == '}' {
+            if self.next_byte()? == b'}' {
                 Ok(value)
             } else {
                 self.fail(ExpectedMapEnd)
@@ -942,17 +947,17 @@ impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
         V: Visitor<'de>,
     {
         self.eat_shit()?;
-        match self.peek_char()? {
-            '"' | '\'' => {
+        match self.peek_byte()? {
+            b'"' | b'\'' => {
                 // Visit a unit variant.
                 visitor.visit_enum(self.parse_quoted_string()?.into_deserializer())
             }
-            '{' => {
+            b'{' => {
                 self.advance(1);
                 // Visit a newtype variant, tuple variant, or struct variant.
                 let value = visitor.visit_enum(EnumReader::new(self))?;
                 self.eat_shit()?;
-                if self.next_char()? == '}' {
+                if self.next_byte()? == b'}' {
                     Ok(value)
                 } else {
                     self.fail(ExpectedMapEnd)
