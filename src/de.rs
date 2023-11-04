@@ -412,6 +412,7 @@ impl<'de> Deserializer<'de> {
 
     /// Parse the JSON identifier `true` or `false`.
     fn parse_bool(&mut self) -> Result<bool> {
+        self.eat_shit()?;
         if self.try_read(b"true") {
             Ok(true)
         } else if self.try_read(b"false") {
@@ -508,7 +509,6 @@ impl<'de> Deserializer<'de> {
 
     /// Parse a string until end of line
     fn parse_quoteless_str(&mut self) -> Result<&'de str> {
-        self.eat_shit()?;
         for (idx, ch) in self.input().char_indices() {
             if ch == '\r' || ch == '\n' {
                 let s = self.start(idx);

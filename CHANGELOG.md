@@ -1,3 +1,7 @@
+<a name="v2.2.2"></a>
+### v2.2.2 - 2023-11-04
+- fix non optional boolean value not parsed after a space in a struct - Fix #18
+
 <a name="v2.2.1"></a>
 ### v2.2.1 - 2023-10-27
 - performance improvements

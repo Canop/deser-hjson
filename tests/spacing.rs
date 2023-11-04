@@ -25,3 +25,16 @@ fn test_struct() {
     assert_eq!(expected, deser_hjson::from_str(hjson).unwrap());
 }
 
+// https://github.com/Canop/deser-hjson/issues/18
+#[test]
+fn test_bool_after_whitespace() {
+    #[derive(Deserialize, PartialEq, Debug)]
+    struct Bool {
+        ping: bool,
+    }
+    let b: Bool = deser_hjson::from_str("ping:true\n ").unwrap();
+    assert_eq!(b, Bool { ping: true });
+
+    let b: Bool = deser_hjson::from_str(r#"ping: true"#).unwrap();
+    assert_eq!(b, Bool { ping: true });
+}
