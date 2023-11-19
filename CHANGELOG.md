@@ -1,3 +1,7 @@
+<a name="v2.2.3"></a>
+### v2.2.3 - 2023-11-19
+- fix a case of non understood hjson (regression introduced in 2.2.1) - Fix #20
+
 <a name="v2.2.2"></a>
 ### v2.2.2 - 2023-11-04
 - fix non optional boolean value not parsed after a space in a struct - Fix #18

@@ -47,9 +47,6 @@ fn guess_wrapped(hjson: &str, answer: Guess) {
     }
 }
 
-
-
-
 /// test precise primitive type guessing.
 /// Note to users: be cautious with this, guessing types is
 /// dangerous as Hjson is inherently ambiguous.
