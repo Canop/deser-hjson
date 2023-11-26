@@ -44,7 +44,8 @@ impl<'de> Deserializer<'de> {
         }
     }
 
-    /// compute the number of lines and columns to current pos
+    /// Compute the number of lines and columns to current pos.
+    /// First line and first col are of index 1.
     #[cold]
     fn location(&self) -> (usize, usize) {
         let (mut line, mut col) = (1, 1);
@@ -57,6 +58,21 @@ impl<'de> Deserializer<'de> {
             }
         }
         (line, col)
+    }
+
+    fn col(&self) -> usize {
+        let mut p = self.pos;
+        loop {
+            if p == 0 {
+                break;
+            }
+            let b = self.src.as_bytes()[p];
+            if b == b'\r' || b == b'\n' {
+                break;
+            }
+            p -= 1;
+        }
+        self.pos - p
     }
 
     /// build a syntax error
@@ -256,9 +272,9 @@ impl<'de> Deserializer<'de> {
     /// tells whether the next tree bytes are `'''` which
     /// is the start or end of a multiline string literal in Hjson
     #[inline]
-    fn is_at_triple_quote(&self, offset: usize) -> bool {
-        self.src.len() >= self.pos + offset + 3
-            && &self.src[offset + self.pos..offset + self.pos + 3] == "'''"
+    fn is_at_triple_quote(&self) -> bool {
+        self.src.len() >= self.pos + 3
+            && &self.src[self.pos..self.pos + 3] == "'''"
     }
 
     #[inline]
@@ -284,31 +300,6 @@ impl<'de> Deserializer<'de> {
                 Ok(())
             }
             None => self.fail(Eof),
-        }
-    }
-
-    /// advance until the first non space character and
-    /// return the number of eaten bytes in the last
-    /// line (which is the number of chars as the only
-    /// whitespaces in Hjson are 1 byte long)
-    pub(crate) fn eat_spaces(&mut self) -> Result<usize> {
-        let mut eaten_bytes = 0;
-        loop {
-            let b = self.peek_byte()?;
-            match b {
-                b'\n' => {
-                    self.accept_quoteless_value = true;
-                    self.advance(1);
-                    eaten_bytes = 0;
-                }
-                b' ' | b'\t'| b'\x0C' | b'\r' => {
-                    self.advance(1);
-                    eaten_bytes += 1
-                }
-                _ => {
-                    return Ok(eaten_bytes);
-                }
-            }
         }
     }
 
@@ -521,38 +512,57 @@ impl<'de> Deserializer<'de> {
 
     /// Parse a string until the next triple quote.
     fn parse_multiline_string(&mut self) -> Result<String> {
-        if !self.is_at_triple_quote(0) {
-            // We could probably assume the first three bytes
-            // are "'''" and can be dropped without check
-            return self.fail(ExpectedString);
+        let indent = self.col() - 1;
+        self.advance(3); // consume the triple quote
+
+        // if the multiline string starts on the same line
+        // than the triple quote, we must ignore the leading
+        // spaces
+        loop {
+            let b = self.peek_byte()?;
+            match b {
+                b'\n' => {
+                    self.advance(1);
+                    break;
+                }
+                b' ' | b'\t'| b'\x0C' | b'\r' => {
+                    self.advance(1);
+                }
+                _ => {
+                    break;
+                }
+            }
         }
-        self.advance(3);
-        self.eat_line()?;
-        // we count the spaces on the first line
-        let indent = self.eat_spaces()?;
+
+        // we then loop on lines
         let mut v = String::new();
-        let mut line_len = indent;
-        for (idx, ch) in self.input().char_indices() {
+        let mut rem = indent; // the number of leading spaces we remove
+        while let Ok(ch) = self.next_char() {
             match ch {
-                '\'' if self.is_at_triple_quote(idx) => {
-                    self.advance(idx + 3);
-                    v.truncate(v.trim_end().len()); // trimming end
+                '\'' if self.src.as_bytes()[self.pos] == b'\'' && self.src.as_bytes()[self.pos+1] == b'\'' => {
+                    self.advance(2); // the 2 other quotes
+                    v.truncate(v.trim_end_matches(|c| c=='\n' || c=='\r').len()); // trimming \n at end
                     return Ok(v);
+                }
+                '\n' => {
+                    v.push(ch);
+                    rem = indent;
                 }
                 '\r' => {
                     // a \r not followed by a \n is probably not
                     // valid but I'm not sure an error would be
                     // more useful here than silently ignoring it
                 }
-                '\n' => {
-                    v.push(ch);
-                    line_len = 0;
-                }
-                _ => {
-                    if line_len >= indent || !ch.is_whitespace() {
+                ' ' | '\t'| '\x0C' => {
+                    if rem > 0 {
+                        rem -= 1;
+                    } else {
                         v.push(ch);
                     }
-                    line_len += 1;
+                }
+                _ => {
+                    rem = 0;
+                    v.push(ch);
                 }
             }
         }
@@ -589,7 +599,7 @@ impl<'de> Deserializer<'de> {
         let b = self.peek_byte()?;
         let v = match b {
             b',' | b':' | b'[' | b']' | b'{' | b'}' => self.fail(UnexpectedChar),
-            b'\'' if self.is_at_triple_quote(0) => self.parse_multiline_string(),
+            b'\'' if self.is_at_triple_quote() => self.parse_multiline_string(),
             b'"' | b'\'' => self.parse_quoted_string(),
             _ => (if self.accept_quoteless_value {
                 self.parse_quoteless_str()
