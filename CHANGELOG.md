@@ -1,3 +1,7 @@
+<a name="v2.2.4"></a>
+### v2.2.4 - 2023-11-28
+- fix wrong handling of some multiline strings - Fix #19
+
 <a name="v2.2.3"></a>
 ### v2.2.3 - 2023-11-19
 - fix a case of non understood hjson (regression introduced in 2.2.1) - Fix #20
