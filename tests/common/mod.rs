@@ -3,12 +3,7 @@
 // allows writing vo!["a", "b"] to build a vec of strings
 macro_rules! vo {
     ($($item:literal),* $(,)?) => {{
-        #[allow(unused_mut)]
-        let mut vec = Vec::new();
-        $(
-            vec.push($item.to_owned());
-        )*
-        vec
+        vec![$($item.to_owned()),*]
     }}
 }
 

@@ -541,7 +541,7 @@ impl<'de> Deserializer<'de> {
             match ch {
                 '\'' if self.src.as_bytes()[self.pos] == b'\'' && self.src.as_bytes()[self.pos+1] == b'\'' => {
                     self.advance(2); // the 2 other quotes
-                    v.truncate(v.trim_end_matches(|c| c=='\n' || c=='\r').len()); // trimming \n at end
+                    v.truncate(v.trim_end_matches(['\n','\r']).len()); // trimming \n at end
                     return Ok(v);
                 }
                 '\n' => {
@@ -646,7 +646,7 @@ impl<'de> Deserializer<'de> {
 
 }
 
-impl<'de, 'a> de::Deserializer<'de> for &'a mut Deserializer<'de> {
+impl<'de> de::Deserializer<'de> for & mut Deserializer<'de> {
     type Error = Error;
 
     fn deserialize_any<V>(self, visitor: V) -> Result<V::Value>
