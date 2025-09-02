@@ -34,3 +34,22 @@ fn test_quoteless_key() {
     }
 }
 
+#[test]
+fn test_string_map_with_integer_key() {
+    #[derive(serde::Deserialize, Debug)]
+    struct S {
+        map: HashMap<String, String>,
+    }
+    let hjson = r#"
+    map: {
+        1: "one",
+        2: "two",
+        3254884515488: "many",
+    }
+    "#;
+    println!("Hjson:\n{}", &hjson);
+    let s: S = deser_hjson::from_str(&hjson).unwrap();
+    dbg!(&s);
+    assert_eq!(s.map.get("1").unwrap(), "one");
+    assert_eq!(s.map.len(), 3);
+}
