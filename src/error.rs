@@ -68,15 +68,16 @@ pub enum Error {
     /// much as possible
     RawSerde(String),
 
-    /// an UTF8 error, raised when using from_slice
+    /// an UTF8 error, raised when using `from_slice`
     /// with an invalid UTF8 slice
     Utf8(Utf8Error),
 
-    /// an IO error, raised when using from_reader
+    /// an IO error, raised when using `from_reader`
     Io(io::Error),
 }
 
 impl Error {
+    #[must_use]
     pub fn is_eof(&self) -> bool {
         matches!(self, Error::Syntax { code: ErrorCode::Eof, .. })
     }
@@ -104,13 +105,13 @@ impl fmt::Display for Error {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Syntax { line, col, code, at } => {
-                write!(formatter, "{:?} at {}:{} at {:?}", code, line, col, at)
+                write!(formatter, "{code:?} at {line}:{col} at {at:?}")
             }
             Self::Serde { line, col, message } => {
-                write!(formatter, "{:?} near {}:{}", message, line, col)
+                write!(formatter, "{message:?} near {line}:{col}")
             }
             Self::RawSerde(msg) => {
-                write!(formatter, "error message: {:?}", msg)
+                write!(formatter, "error message: {msg:?}")
             }
             Self::Utf8(source) => {
                 source.fmt(formatter)

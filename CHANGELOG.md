@@ -1,3 +1,7 @@
+<a name="v2.2.5"></a>
+### v2.2.5 - 2025-12-08
+- remove one case of a string asking for quotes: untagged string starting with a '-'
+
 <a name="v2.2.4"></a>
 ### v2.2.4 - 2023-11-28
 - fix wrong handling of some multiline strings - Fix #19

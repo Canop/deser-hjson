@@ -19,6 +19,7 @@ command = [
 	"--color", "always",
 	"--",
 	"-A", "clippy::vec_init_then_push",
+	"-A", "clippy::match_like_matches_macro",
 ]
 need_stdout = false
 
@@ -57,3 +58,4 @@ allow_warnings = true
 # should go in your personal global prefs.toml file instead.
 [keybindings]
 # alt-m = "job:my-job"
+c = "job:clippy"

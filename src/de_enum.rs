@@ -21,7 +21,7 @@ impl<'a, 'de> EnumReader<'a, 'de> {
 //
 // Note that all enum deserialization methods in Serde refer exclusively to the
 // "externally tagged" enum representation.
-impl<'de, 'a> EnumAccess<'de> for EnumReader<'a, 'de> {
+impl<'de> EnumAccess<'de> for EnumReader<'_, 'de> {
     type Error = Error;
     type Variant = Self;
 
@@ -44,7 +44,7 @@ impl<'de, 'a> EnumAccess<'de> for EnumReader<'a, 'de> {
 
 // `VariantAccess` is provided to the `Visitor` to give it the ability to see
 // the content of the single variant that it decided to deserialize.
-impl<'de, 'a> VariantAccess<'de> for EnumReader<'a, 'de> {
+impl<'de> VariantAccess<'de> for EnumReader<'_, 'de> {
     type Error = Error;
 
     // If the `Visitor` expected this variant to be a unit variant, the input

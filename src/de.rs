@@ -125,13 +125,13 @@ impl<'de> Deserializer<'de> {
 
     /// what remains to be parsed (including the
     /// character we peeked at, if any)
-    #[inline(always)]
+    #[inline]
     pub(crate) fn input(&self) -> &'de str {
         &self.src[self.pos..]
     }
 
     /// takes all remaining characters
-    #[inline(always)]
+    #[inline]
     pub(crate) fn take_all(&mut self) -> &'de str {
         let s = &self.src[self.pos..];
         self.pos = self.src.len();
@@ -150,7 +150,7 @@ impl<'de> Deserializer<'de> {
         // we can safely assume the bytes here are consistent with an UTF8 string
         let x = bytes[self.pos];
         if x < 128 {
-            return Ok(((x as u32), 1));
+            return Ok((u32::from(x), 1));
         }
         // Decode from a byte combination out of: [[[x y] z] w]
         let init = utf8_first_byte(x, 2);
@@ -161,7 +161,7 @@ impl<'de> Deserializer<'de> {
             // [[x y z] w] case
             // 5th bit in 0xE0 .. 0xEF is always clear, so `init` is still valid
             let z = unsafe { *bytes.get_unchecked(self.pos+2) };
-            let y_z = utf8_acc_cont_byte((y & CONT_MASK) as u32, z);
+            let y_z = utf8_acc_cont_byte(u32::from(y & CONT_MASK), z);
             ch = init << 12 | y_z;
             if x >= 0xF0 {
                 // [x y z w] case
@@ -186,6 +186,16 @@ impl<'de> Deserializer<'de> {
             self.fail(Eof)
         } else {
             Ok(bytes[self.pos])
+        }
+    }
+
+    /// Return the byte at pos + offset, or None if out of bounds.
+    pub(crate) fn try_peek_byte_at_offset(&self, offset: usize) -> Option<u8> {
+        let bytes = self.src.as_bytes();
+        if self.pos + offset >= bytes.len() {
+            None
+        } else {
+            Some(bytes[self.pos + offset])
         }
     }
 
@@ -219,9 +229,9 @@ impl<'de> Deserializer<'de> {
         Ok(ch)
     }
 
-    /// read bytes_count bytes of a string.
+    /// read `bytes_count` bytes of a string.
     ///
-    /// The validity of pos + bytes_count as a valid UTF8 position must
+    /// The validity of `pos + bytes_count` as a valid UTF8 position must
     /// have been checked before.
     #[inline]
     pub(crate) fn take_str(&mut self, bytes_count: usize) -> Result<&str> {
@@ -263,7 +273,7 @@ impl<'de> Deserializer<'de> {
         self.advance(ch.len_utf8());
     }
 
-    /// advance the cursor (assuming bytes_count is consistent with chars)
+    /// advance the cursor (assuming `bytes_count` is consistent with chars)
     #[inline]
     pub(crate) fn advance(&mut self, bytes_count: usize) {
         self.pos += bytes_count;
@@ -656,7 +666,11 @@ impl<'de> de::Deserializer<'de> for & mut Deserializer<'de> {
         self.eat_shit()?;
         match self.peek_byte()? {
             b'"' | b'\'' => self.deserialize_string(visitor),
-            b'0'..=b'9' | b'-' => {
+            b'0'..=b'9' => {
+                let number = Number::read(self)?;
+                number.visit(self, visitor)
+            }
+            b'-' if is_byte_some_digit(self.try_peek_byte_at_offset(1)) => {
                 let number = Number::read(self)?;
                 number.visit(self, visitor)
             }

@@ -23,7 +23,7 @@ impl<'a, 'de> MapReader<'a, 'de> {
 
 // `MapAccess` is provided to the `Visitor` to give it the ability to iterate
 // through entries of the map.
-impl<'de, 'a> MapAccess<'de> for MapReader<'a, 'de> {
+impl<'de> MapAccess<'de> for MapReader<'_, 'de> {
     type Error = Error;
 
     /// read a map key and the following colon

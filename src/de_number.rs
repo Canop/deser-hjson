@@ -73,3 +73,10 @@ impl<'de> Number<'de> {
         }
     }
 }
+
+pub(crate) fn is_byte_some_digit(b: Option<u8>) -> bool {
+    match b {
+        Some(b'0'..=b'9') => true,
+        _ => false,
+    }
+}

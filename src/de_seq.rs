@@ -6,7 +6,7 @@ use {
     serde::de::{DeserializeSeed, SeqAccess},
 };
 
-/// an implementation of serde's SeqAccess interface which
+/// an implementation of serde's `SeqAccess` interface which
 /// is used to deserialize arrays
 pub struct SeqReader<'a, 'de: 'a> {
     de: &'a mut Deserializer<'de>,
@@ -20,7 +20,7 @@ impl<'a, 'de> SeqReader<'a, 'de> {
 
 // `SeqAccess` is provided to the `Visitor` to give it the ability to iterate
 // through elements of the sequence.
-impl<'de, 'a> SeqAccess<'de> for SeqReader<'a, 'de> {
+impl<'de> SeqAccess<'de> for SeqReader<'_, 'de> {
     type Error = Error;
 
     /// read an array item and eat the optional comma which may follow it
