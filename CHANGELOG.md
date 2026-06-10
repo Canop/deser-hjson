@@ -1,3 +1,6 @@
+### next
+- fix comments not being ignored without a newline (at end of file) - Fix #23
+
 <a name="v2.2.5"></a>
 ### v2.2.5 - 2025-12-08
 - remove one case of a string asking for quotes: untagged string starting with a '-'
