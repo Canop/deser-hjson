@@ -1,4 +1,5 @@
-### next
+<a name="v2.2.6"></a>
+### v2.2.6 - 2026-06-10
 - fix comments not being ignored without a newline (at end of file) - Fix #23
 
 <a name="v2.2.5"></a>
