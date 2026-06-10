@@ -381,9 +381,7 @@ impl<'de> Deserializer<'de> {
                 }
                 '/' => {
                     if last_is_slash {
-                        eprintln!("last is slash, eat line");
                         self.eat_line()?;
-                        eprintln!("done");
                         last_is_slash = false;
                     } else {
                         self.advance(1);
